@@ -6,6 +6,7 @@ import { Plan } from "./components/Plan.tsx";
 import { Ride } from "./components/Ride.tsx";
 import { CrewTab, MeTab, openSaved, RidesTab, RoutesTab } from "./components/Tabs.tsx";
 import { MapView } from "./map.ts";
+import { updateAvailable, watchForUpdates } from "./update.ts";
 import { router, routerReady } from "./routerClient.ts";
 import {
   current, mode, myLocation, pickIndex, points, refreshPace, results, routerInfo, screen, selected, setPoint, sharedName, showToast, toast,
@@ -18,6 +19,9 @@ export function App() {
   useEffect(() => {
     const m = new MapView(mapEl.current!);
     setMap(m);
+    watchForUpdates();
+    // ?debug exposes internals for poking at from the browser console.
+    if (new URLSearchParams(location.search).has("debug")) Object.assign(window, { kayuh: { map: m, router, current } });
     refreshPace();
     routerReady.then((info) => {
       routerInfo.value = info;
@@ -81,6 +85,11 @@ export function App() {
       {s === "crew" && <CrewTab />}
       {s === "me" && <MeTab />}
       {toast.value && <div class="toast" role="status">{toast.value}</div>}
+      {updateAvailable.value && (
+        <button class="update-banner" onClick={() => location.reload()}>
+          A new version of Kayuh is ready · <strong>Reload</strong>
+        </button>
+      )}
     </div>
   );
 }

@@ -82,7 +82,7 @@ export function Discover({ map }: { map: MapView | null }) {
             <div key={l}><span class="swatch" style={{ background: c }} />{l}</div>
           ))}
           <div><span class="swatch dotted" />Footpath</div>
-          <div><span class="p-badge">P</span>Legal parking</div>
+          <div><span class="p-badge">P</span>Parking on your route</div>
         </div>
       )}
 

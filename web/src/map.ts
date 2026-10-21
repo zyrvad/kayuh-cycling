@@ -9,10 +9,8 @@ const FONT = ["Noto Sans Bold"];
 const INK = "#1D2A23";
 /** Parking is clustered ("12 P" bubbles) until this zoom, then drawn spot by spot. */
 const PARKING_CLUSTER_MAX_ZOOM = 16;
-/** While browsing (no route), parking appears from this zoom; with a route, from ROUTE_PARKING_MINZOOM. */
-const BROWSE_PARKING_MINZOOM = 14;
-const ROUTE_PARKING_MINZOOM = 12;
-const PARKING_LAYERS = ["parking-cluster", "parking-cluster-count", "poi-parking", "poi-parking-label"];
+/** Route parking appears from this zoom. */
+const PARKING_MINZOOM = 12;
 
 const empty = (): GeoJSON.FeatureCollection => ({ type: "FeatureCollection", features: [] });
 
@@ -150,17 +148,17 @@ export class MapView {
     // Legal parking has its own clustered source: 23k racks and yellow boxes are far too many to draw one by one.
     m.addSource("parking", { type: "geojson", data: empty(), cluster: true, clusterRadius: 44, clusterMaxZoom: PARKING_CLUSTER_MAX_ZOOM });
     const isCluster: maplibregl.FilterSpecification = ["has", "point_count"];
-    m.addLayer({ id: "parking-cluster", type: "circle", source: "parking", minzoom: BROWSE_PARKING_MINZOOM, filter: isCluster,
+    m.addLayer({ id: "parking-cluster", type: "circle", source: "parking", minzoom: PARKING_MINZOOM, filter: isCluster,
       paint: {
         "circle-color": "#FFFFFF", "circle-stroke-color": INK, "circle-stroke-width": 1.5,
         "circle-radius": ["step", ["get", "point_count"], 11, 10, 13, 50, 16],
       } });
-    m.addLayer({ id: "parking-cluster-count", type: "symbol", source: "parking", minzoom: BROWSE_PARKING_MINZOOM, filter: isCluster,
+    m.addLayer({ id: "parking-cluster-count", type: "symbol", source: "parking", minzoom: PARKING_MINZOOM, filter: isCluster,
       layout: { "text-field": ["concat", ["get", "point_count_abbreviated"], " P"], "text-font": FONT, "text-size": 10, "text-allow-overlap": true },
       paint: { "text-color": INK } });
-    m.addLayer({ id: "poi-parking", type: "circle", source: "parking", minzoom: BROWSE_PARKING_MINZOOM, filter: ["!", isCluster],
+    m.addLayer({ id: "poi-parking", type: "circle", source: "parking", minzoom: PARKING_MINZOOM, filter: ["!", isCluster],
       paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 5, 16, 8], "circle-color": INK, "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 1.5 } });
-    m.addLayer({ id: "poi-parking-label", type: "symbol", source: "parking", minzoom: BROWSE_PARKING_MINZOOM, filter: ["!", isCluster],
+    m.addLayer({ id: "poi-parking-label", type: "symbol", source: "parking", minzoom: 14.5, filter: ["!", isCluster],
       layout: { "text-field": "P", "text-font": FONT, "text-size": 10, "text-allow-overlap": true }, paint: { "text-color": "#FFFFFF" } });
 
     m.addSource("stops", { type: "geojson", data: empty() });
@@ -218,25 +216,29 @@ export class MapView {
     const all = pois.map(feature);
     this.parking = all.filter((f) => f.properties!.k === "parking");
     (this.map.getSource("pois") as GeoJSONSource).setData({ type: "FeatureCollection", features: all.filter((f) => f.properties!.k !== "parking") });
-    await this.setParkingFocus(this.focus);
+    this.applyParking();
   }
 
   private focus: number[] | null = null;
 
   /**
-   * Which parking to draw. With a route: only spots within reach of it (ids from the router),
-   * from further out. Without: everything, clustered, once you zoom in to street level.
+   * Which parking to draw: only spots within reach of the route you're on (ids from the router).
+   * With no route (null) the map shows no parking at all.
    */
   async setParkingFocus(ids: number[] | null) {
-    await this.loaded;
+    // Record the request before awaiting, and draw whatever is latest once loaded, so a slower
+    // earlier call can't overwrite a newer one.
     this.focus = ids;
-    const keep = ids ? new Set(ids) : null;
+    await this.loaded;
+    this.applyParking();
+  }
+
+  private applyParking() {
+    const keep = new Set(this.focus ?? []);
     (this.map.getSource("parking") as GeoJSONSource).setData({
       type: "FeatureCollection",
-      features: keep ? this.parking.filter((f) => keep.has(f.properties!.id)) : this.parking,
+      features: this.parking.filter((f) => keep.has(f.properties!.id)),
     });
-    const minzoom = ids ? ROUTE_PARKING_MINZOOM : BROWSE_PARKING_MINZOOM;
-    for (const id of PARKING_LAYERS) this.map.setLayerZoomRange(id, id.endsWith("label") ? Math.max(minzoom, 14.5) : minzoom, 24);
   }
 
   async setRoutes(routes: RouteResult[], selected: number) {
