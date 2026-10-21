@@ -13,8 +13,8 @@ run_worker_first = true
 [[d1_databases]]
 binding = "DB"
 database_name = "kayuh"
-# Replace with the id from `npx wrangler d1 create kayuh` before the first deploy.
-database_id = "00000000-0000-0000-0000-000000000000"
+# Created 21 Oct 2026 with `npx wrangler d1 create kayuh --location apac`.
+database_id = "2541bc95-8c4e-4eb6-9896-53ee654b5723"
 migrations_dir = "migrations"
 
 # Secrets (set with `npx wrangler secret put NAME`, or in .dev.vars locally):

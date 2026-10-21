@@ -3,12 +3,13 @@
 Usage: .venv/bin/python pipeline/build.py
 
 Outputs
-  web/public/data/graph.bin       routing graph (format: packages/router/src/graph.ts)
+  web/public/data/graph.bin.gz    routing graph, gzipped (format: packages/router/src/graph.ts)
   web/public/data/pois.json       parking + amenities, snapped to graph nodes
   web/public/data/network.pmtiles tiers for the map (needs tippecanoe)
   data/build/network.geojson      same, as GeoJSON (input to tippecanoe)
   docs/DATA.md                    coverage report
 """
+import gzip
 import json
 import math
 import re
@@ -494,10 +495,14 @@ def main():
         np.array(E["geom"], "<u4").tobytes(), coords_arr.tobytes(), pad4(str_bytes),
     ]
     header = struct.pack("<4sIIIII", b"KYH1", 1, n_nodes, len(E["from"]), len(coords_out), len(str_bytes))
-    (OUT / "graph.bin").write_bytes(header + b"".join(sections))
+    # Shipped gzipped: Cloudflare doesn't compress binary assets, and the app unpacks it with
+    # the browser's DecompressionStream (12.6 MB -> ~5.4 MB on the wire).
+    (OUT / "graph.bin").unlink(missing_ok=True)
+    with gzip.open(OUT / "graph.bin.gz", "wb", compresslevel=9) as f:
+        f.write(header + b"".join(sections))
     (OUT / "pois.json").write_text(json.dumps({"built": report["built"], "pois": out_pois}, separators=(",", ":")))
     (BUILD / "network.geojson").write_text(json.dumps({"type": "FeatureCollection", "features": features}))
-    log(f"  graph.bin {(OUT / 'graph.bin').stat().st_size / 1e6:.1f} MB")
+    log(f"  graph.bin.gz {(OUT / 'graph.bin.gz').stat().st_size / 1e6:.1f} MB")
 
     # Plain {z}/{x}/{y}.pbf tiles: work on any static host (PMTiles needs HTTP range requests).
     tiles = OUT / "tiles"

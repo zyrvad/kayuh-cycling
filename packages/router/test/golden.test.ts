@@ -4,6 +4,7 @@
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
@@ -12,7 +13,7 @@ import {
 } from "../src/index.ts";
 
 const dataDir = fileURLToPath(new URL("../../../web/public/data/", import.meta.url));
-const buf = readFileSync(dataDir + "graph.bin");
+const buf = gunzipSync(readFileSync(dataDir + "graph.bin.gz"));
 const graph = parseGraph(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
 const pois = new PoiIndex(JSON.parse(readFileSync(dataDir + "pois.json", "utf8")).pois);
 const ctx = createContext(graph, pois);

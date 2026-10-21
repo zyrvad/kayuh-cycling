@@ -17,7 +17,7 @@ let ctx: PlanContext | null = null;
 let pois: Poi[] = [];
 const ready = (async () => {
   const [g, p] = await Promise.all([
-    fetch("/data/graph.bin").then((r) => r.arrayBuffer()),
+    fetch("/data/graph.bin.gz").then((r) => new Response(r.body!.pipeThrough(new DecompressionStream("gzip"))).arrayBuffer()),
     fetch("/data/pois.json").then((r) => r.json()),
   ]);
   pois = p.pois;
