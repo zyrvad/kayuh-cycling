@@ -1,0 +1,21 @@
+name = "kayuh"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# The web app (web/dist) is served as static assets; /api/* goes to the Worker.
+[assets]
+directory = "../web/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+# The Worker routes /api/* itself and hands everything else to ASSETS.
+run_worker_first = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "kayuh"
+# Replace with the id from `npx wrangler d1 create kayuh` before the first deploy.
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+# Secrets (set with `npx wrangler secret put NAME`, or in .dev.vars locally):
+#   ONEMAP_TOKEN  optional; OneMap search currently works without it

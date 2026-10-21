@@ -1,0 +1,13 @@
+{
+  "name": "kayuh",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*", "web", "worker"],
+  "scripts": {
+    "pipeline": ".venv/bin/python pipeline/build.py",
+    "test": "npm run test -w @kayuh/router && .venv/bin/python -m pytest -q pipeline",
+    "golden": "npm run golden -w @kayuh/router",
+    "dev": "npm run build -w web && npm run dev -w worker",
+    "deploy": "npm run build -w web && npm run deploy -w worker"
+  }
+}
