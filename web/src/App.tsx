@@ -8,7 +8,7 @@ import { CrewTab, MeTab, openSaved, RidesTab, RoutesTab } from "./components/Tab
 import { MapView } from "./map.ts";
 import { router, routerReady } from "./routerClient.ts";
 import {
-  current, mode, myLocation, pickIndex, points, results, routerInfo, screen, selected, setPoint, sharedName, showToast, toast,
+  current, mode, myLocation, pickIndex, points, refreshPace, results, routerInfo, screen, selected, setPoint, sharedName, showToast, toast,
 } from "./state.ts";
 
 export function App() {
@@ -18,16 +18,18 @@ export function App() {
   useEffect(() => {
     const m = new MapView(mapEl.current!);
     setMap(m);
+    refreshPace();
     routerReady.then((info) => {
       routerInfo.value = info;
       router.pois().then((p) => m.setPois(p));
     });
     m.onTap = (ll) => {
       const i = pickIndex.value;
-      if (i === null || screen.value !== "plan") return;
+      if (i === null || screen.value !== "plan") return false;
       setPoint(i, { ll, label: "Dropped pin" });
       // In freeform, further taps keep extending the route.
       if (pickIndex.value === null && mode.value === "freeform") pickIndex.value = points.value.length;
+      return true;
     };
     m.onDragPoint = (i, ll) => setPoint(i, { ll, label: points.value[i]?.label === "My location" ? "Near my location" : points.value[i]?.label ?? "Dropped pin" });
 
@@ -40,6 +42,15 @@ export function App() {
         m.setPoints(show ? pts.map((p, i) => p && { ll: p.ll, kind: i === 0 ? "start" : i === pts.length - 1 && mode.value !== "loop" ? "end" : "via", label: p.label }) : []);
       }),
       effect(() => { m.setMe(myLocation.value); }),
+      effect(() => {
+        // Declutter: with a route on screen, only show parking you could actually use along it.
+        const r = current.value;
+        const routeShown = r && (screen.value === "plan" || screen.value === "ride");
+        if (!routeShown) return void m.setParkingFocus(null);
+        router.parkingNearRoute(r.coords).then((ids) => {
+          if (current.value === r) m.setParkingFocus(ids);
+        }).catch(() => m.setParkingFocus(null));
+      }),
       effect(() => {
         const r = current.value;
         if (r && screen.value === "plan") m.fitRoute(r, { top: 170, bottom: Math.round(window.innerHeight * 0.55), left: 40, right: 40 });

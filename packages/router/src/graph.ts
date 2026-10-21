@@ -1,4 +1,4 @@
-import { haversine, type LonLat } from "./geo.ts";
+import { bearing, haversine, type LonLat } from "./geo.ts";
 
 export const TIERS = ["pcn", "cycleway", "shared", "footpath", "quiet_road", "road"] as const;
 export type TierName = (typeof TIERS)[number];
@@ -131,6 +131,19 @@ export function edgeCoords(g: Graph, e: number, backward: boolean): LonLat[] {
   for (let i = g.geomStart[e]; i < g.geomStart[e + 1]; i++) pts.push([g.coords[2 * i] / 1e6, g.coords[2 * i + 1] / 1e6]);
   pts.push(nodeLL(g, g.edgeTo[e]));
   return backward ? pts.reverse() : pts;
+}
+
+/** Bearing leaving the start and arriving at the end of an edge, in travel direction. */
+export function edgeHeadings(g: Graph, e: number, backward: boolean): [number, number] {
+  const s = g.geomStart[e], n = g.geomStart[e + 1] - s;
+  const pt = (i: number): LonLat => {
+    // i indexes the full polyline: 0 = from node, n + 1 = to node.
+    if (i === 0) return nodeLL(g, g.edgeFrom[e]);
+    if (i === n + 1) return nodeLL(g, g.edgeTo[e]);
+    return [g.coords[2 * (s + i - 1)] / 1e6, g.coords[2 * (s + i - 1) + 1] / 1e6];
+  };
+  const [a0, a1, b0, b1] = backward ? [pt(n + 1), pt(n), pt(1), pt(0)] : [pt(0), pt(1), pt(n), pt(n + 1)];
+  return [bearing(a0[0], a0[1], a1[0], a1[1]), bearing(b0[0], b0[1], b1[0], b1[1])];
 }
 
 /**

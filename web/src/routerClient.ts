@@ -33,4 +33,6 @@ export const router = {
   gpx: (route: RouteResult, name: string) => call<string>({ type: "gpx", route, name }),
   parkingNear: ([lon, lat]: LonLat, radiusM = 300) => call<NearbyParking[]>({ type: "parkingNear", lon, lat, radiusM }),
   pois: () => call<Poi[]>({ type: "pois" }),
+  /** Ids (indexes into pois()) of legal parking within radiusM of a route line. */
+  parkingNearRoute: (coords: LonLat[], radiusM = 60) => call<number[]>({ type: "parkingNearRoute", coords, radiusM }),
 };

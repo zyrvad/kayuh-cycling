@@ -79,6 +79,14 @@ test("rides are private by default and can be shared with the crew", async () =>
   await call("PATCH", `/api/rides/${json.id}`, { device: ME, body: { visibility: "crew" } });
   rides = (await call("GET", "/api/rides", { device: ME })).json.rides;
   assert.equal(rides[0].visibility, "crew");
+  assert.equal(rides[0].predictedS, null);
+});
+
+test("recorded rides keep the predicted time for pace learning", async () => {
+  const ride = { name: "Commute", riddenAt: "2026-10-20T08:00:00+08:00", distanceM: 4000, timeS: 1500,
+    tierM: route.tierM, polyline: route.polyline, source: "recorded", predictedS: 1320 };
+  await call("POST", "/api/rides", { device: ME, body: ride });
+  assert.equal((await call("GET", "/api/rides", { device: ME })).json.rides[0].predictedS, 1320);
 });
 
 test("settings round-trip", async () => {

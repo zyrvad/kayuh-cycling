@@ -73,7 +73,7 @@ test("routes are split into legs under the free-ride cap, ending at legal parkin
   const ctx = createContext(g, pois);
   const r = planRoute(ctx, { points: [nodes[0], nodes[20]], capMinutes: 30 }, "nicest");
   assert.equal(r.legs.length, 2);
-  assert.equal(r.legs[0].to.parking?.node, 13, "furthest parking within 27.5 min at 15 km/h");
+  assert.equal(r.legs[0].to.parking?.node, 10, "furthest parking within 27.5 min at 13 km/h");
   assert.ok(r.legs.every((l) => l.timeS <= 30 * 60 && !l.overCap));
   assert.ok(Math.abs(r.distanceM - 10000) < 50);
   assert.equal(r.instructions.filter((i) => i.type === "park").length, 1);
@@ -110,4 +110,26 @@ test("GPX has waypoints for each leg end and a track", () => {
   assert.equal((gpx.match(/<wpt /g) ?? []).length, 3); // start, P1, finish
   assert.ok((gpx.match(/<trkpt /g) ?? []).length >= 2);
   assert.ok(!gpx.includes("<ride>"));
+});
+
+test("lights on both carriageways of one road count once, and waits are added", async () => {
+  const { N_SIGNAL, SIGNAL_WAIT_S, traverse } = await import("../src/index.ts");
+  // 1 km straight path with two signal nodes 20 m apart (a divided road) and one more 500 m later.
+  const nodes: LonLat[] = [[103.8, 1.3], [103.80027, 1.3], [103.80045, 1.3], [103.8045, 1.3], [103.809, 1.3]];
+  const g = makeGraph(nodes, [[0, 1, PCN], [1, 2, PCN], [2, 3, PCN], [3, 4, PCN]]);
+  g.nodeFlags[1] = g.nodeFlags[2] = g.nodeFlags[3] = N_SIGNAL;
+  const r = planRoute(createContext(g, new PoiIndex([])), { points: [nodes[0], nodes[4]], snapToParking: false, capMinutes: null }, "nicest");
+  assert.equal(r.signals, 2);
+  assert.equal(r.lights.length, 2);
+  const ride = r.steps.reduce((t, s) => t + g.edgeLen[s.edge] / (13 / 3.6), 0);
+  assert.ok(Math.abs(r.timeS - (ride + 2 * SIGNAL_WAIT_S)) < 1, `${r.timeS} vs ${ride + 2 * SIGNAL_WAIT_S}`);
+  assert.equal(traverse(g, r.steps).lights.length, 2);
+});
+
+test("re-parking between legs is added to the total time", () => {
+  const { nodes, g } = chain();
+  const pois = new PoiIndex([0, 6, 10, 13, 16, 20].map((n) => parking(n, nodes[n])));
+  const r = planRoute(createContext(g, pois), { points: [nodes[0], nodes[20]], capMinutes: 30 }, "nicest");
+  const legSum = r.legs.reduce((t, l) => t + l.timeS, 0);
+  assert.equal(Math.round(r.timeS - legSum), 90 * (r.legs.length - 1));
 });

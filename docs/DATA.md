@@ -33,7 +33,14 @@ Tier upgrades from conflation:
 - bike_shop: 97
 - hawker: 122
 - mrt: 77
-- parking: 1008
+- parking: 23675
 - toilet: 661
 - water: 199
-- parking by source: {'lta': 364, 'osm': 644}
+- parking by source: {'lta': 23232, 'osm': 443}
+
+## Parking: what's missing and how to fill it
+
+Shared bikes may park at any public bike rack or yellow box (LTA put its QR code on all of them).
+The complete list is LTA DataMall's `BicycleParkingv2` API; set `LTA_DATAMALL_KEY` (free, from
+https://datamall.lta.gov.sg) and rerun `data/fetch.py --skip-osm`, then the pipeline.
+The HelloRide/Anywheel apps' data isn't published, and copying it out of the apps would break their terms.

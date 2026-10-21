@@ -23,7 +23,7 @@ npm install
 ```
 
 ```bash
-.venv/bin/python data/fetch.py
+LTA_DATAMALL_KEY=your-key .venv/bin/python data/fetch.py
 ```
 
 ```bash

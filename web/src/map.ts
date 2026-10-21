@@ -7,8 +7,38 @@ const STYLE = "https://tiles.openfreemap.org/styles/positron";
 const SG_CENTER: LonLat = [103.86, 1.355];
 const FONT = ["Noto Sans Bold"];
 const INK = "#1D2A23";
+/** Parking is clustered ("12 P" bubbles) until this zoom, then drawn spot by spot. */
+const PARKING_CLUSTER_MAX_ZOOM = 16;
+/** While browsing (no route), parking appears from this zoom; with a route, from ROUTE_PARKING_MINZOOM. */
+const BROWSE_PARKING_MINZOOM = 14;
+const ROUTE_PARKING_MINZOOM = 12;
+const PARKING_LAYERS = ["parking-cluster", "parking-cluster-count", "poi-parking", "poi-parking-label"];
 
 const empty = (): GeoJSON.FeatureCollection => ({ type: "FeatureCollection", features: [] });
+
+/** A small traffic-light glyph (drawn at 2x for sharp screens). */
+function trafficLightIcon(): ImageData {
+  const w = 22, h = 44;
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const x = c.getContext("2d")!;
+  x.fillStyle = "#FFFFFF";
+  x.beginPath();
+  x.roundRect(0, 0, w, h, 7);
+  x.fill();
+  x.fillStyle = "#1D2A23";
+  x.beginPath();
+  x.roundRect(2, 2, w - 4, h - 4, 5);
+  x.fill();
+  ["#E5484D", "#F2B33D", "#3DBE6E"].forEach((col, i) => {
+    x.fillStyle = col;
+    x.beginPath();
+    x.arc(w / 2, 10 + i * 12, 4.2, 0, Math.PI * 2);
+    x.fill();
+  });
+  return x.getImageData(0, 0, w, h);
+}
 
 export interface PointMarker {
   ll: LonLat;
@@ -21,7 +51,8 @@ export class MapView {
   readonly map: maplibregl.Map;
   private loaded: Promise<void>;
   private markers: maplibregl.Marker[] = [];
-  onTap: (ll: LonLat) => void = () => {};
+  /** Return true when the tap was used (e.g. to place a point), so the map does nothing else with it. */
+  onTap: (ll: LonLat) => boolean | void = () => {};
   onDragPoint: (index: number, ll: LonLat) => void = () => {};
 
   constructor(container: HTMLElement) {
@@ -44,10 +75,16 @@ export class MapView {
       resolve();
     }));
     this.map.on("click", (e) => {
+      if (this.onTap([e.lngLat.lng, e.lngLat.lat])) return;
+      const cluster = this.map.queryRenderedFeatures(e.point, { layers: ["parking-cluster"] })[0];
+      if (cluster) {
+        (this.map.getSource("parking") as GeoJSONSource).getClusterExpansionZoom(cluster.properties!.cluster_id)
+          .then((zoom) => this.map.easeTo({ center: (cluster.geometry as GeoJSON.Point).coordinates as LonLat, zoom: zoom + 0.5 }));
+        return;
+      }
       const hit = this.map.queryRenderedFeatures(e.point, { layers: ["net-pcn", "net-cycleway", "net-shared", "net-footpath", "poi-parking"] })[0];
       if (hit && hit.layer.id === "poi-parking") this.parkingPopup(hit, e.lngLat);
       else if (hit) this.explainPopup(hit, e.lngLat);
-      this.onTap([e.lngLat.lng, e.lngLat.lat]);
     });
   }
 
@@ -90,6 +127,12 @@ export class MapView {
     m.addLayer({ id: "done", type: "line", source: "done", layout: { "line-cap": "round", "line-join": "round" },
       paint: { "line-color": "#A7B0AA", "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3.5, 16, 8] } });
 
+    // Traffic lights you'll wait at on the selected route.
+    m.addImage("traffic-light", trafficLightIcon(), { pixelRatio: 2 });
+    m.addSource("lights", { type: "geojson", data: empty() });
+    m.addLayer({ id: "k-lights", type: "symbol", source: "lights", minzoom: 11.5,
+      layout: { "icon-image": "traffic-light", "icon-size": ["interpolate", ["linear"], ["zoom"], 11.5, 0.6, 16, 1], "icon-allow-overlap": true, "icon-anchor": "bottom", "icon-offset": [0, -4] } });
+
     m.addSource("pois", { type: "geojson", data: empty() });
     const amenity = (id: string, kind: string, color: string, letter: string) => {
       m.addLayer({ id, type: "circle", source: "pois", minzoom: 14.5, filter: ["==", ["get", "k"], kind],
@@ -104,9 +147,20 @@ export class MapView {
     m.addLayer({ id: "poi-mrt", type: "symbol", source: "pois", minzoom: 12, filter: ["==", ["get", "k"], "mrt"],
       layout: { "text-field": ["coalesce", ["get", "n"], "MRT"], "text-font": FONT, "text-size": 11, "text-offset": [0, 1.1] },
       paint: { "text-color": "#7A2E8E", "text-halo-color": "#FFFFFF", "text-halo-width": 1.5 } });
-    m.addLayer({ id: "poi-parking", type: "circle", source: "pois", minzoom: 12.5, filter: ["==", ["get", "k"], "parking"],
-      paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 12.5, 3, 15, 8], "circle-color": INK, "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 1.5 } });
-    m.addLayer({ id: "poi-parking-label", type: "symbol", source: "pois", minzoom: 14.5, filter: ["==", ["get", "k"], "parking"],
+    // Legal parking has its own clustered source: 23k racks and yellow boxes are far too many to draw one by one.
+    m.addSource("parking", { type: "geojson", data: empty(), cluster: true, clusterRadius: 44, clusterMaxZoom: PARKING_CLUSTER_MAX_ZOOM });
+    const isCluster: maplibregl.FilterSpecification = ["has", "point_count"];
+    m.addLayer({ id: "parking-cluster", type: "circle", source: "parking", minzoom: BROWSE_PARKING_MINZOOM, filter: isCluster,
+      paint: {
+        "circle-color": "#FFFFFF", "circle-stroke-color": INK, "circle-stroke-width": 1.5,
+        "circle-radius": ["step", ["get", "point_count"], 11, 10, 13, 50, 16],
+      } });
+    m.addLayer({ id: "parking-cluster-count", type: "symbol", source: "parking", minzoom: BROWSE_PARKING_MINZOOM, filter: isCluster,
+      layout: { "text-field": ["concat", ["get", "point_count_abbreviated"], " P"], "text-font": FONT, "text-size": 10, "text-allow-overlap": true },
+      paint: { "text-color": INK } });
+    m.addLayer({ id: "poi-parking", type: "circle", source: "parking", minzoom: BROWSE_PARKING_MINZOOM, filter: ["!", isCluster],
+      paint: { "circle-radius": ["interpolate", ["linear"], ["zoom"], 12, 5, 16, 8], "circle-color": INK, "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 1.5 } });
+    m.addLayer({ id: "poi-parking-label", type: "symbol", source: "parking", minzoom: BROWSE_PARKING_MINZOOM, filter: ["!", isCluster],
       layout: { "text-field": "P", "text-font": FONT, "text-size": 10, "text-allow-overlap": true }, paint: { "text-color": "#FFFFFF" } });
 
     m.addSource("stops", { type: "geojson", data: empty() });
@@ -119,7 +173,7 @@ export class MapView {
     m.addLayer({ id: "me-halo", type: "circle", source: "me", paint: { "circle-radius": 18, "circle-color": "#2E6BD1", "circle-opacity": 0.16 } });
     m.addLayer({ id: "me", type: "circle", source: "me", paint: { "circle-radius": 7, "circle-color": "#2E6BD1", "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 3 } });
 
-    for (const id of ["net-pcn", "net-cycleway", "net-shared", "net-footpath", "poi-parking"]) {
+    for (const id of ["net-pcn", "net-cycleway", "net-shared", "net-footpath", "poi-parking", "parking-cluster"]) {
       m.on("mouseenter", id, () => (m.getCanvas().style.cursor = "pointer"));
       m.on("mouseleave", id, () => (m.getCanvas().style.cursor = ""));
     }
@@ -141,23 +195,48 @@ export class MapView {
   }
 
   private parkingPopup(f: maplibregl.MapGeoJSONFeature, at: maplibregl.LngLat) {
-    const p = f.properties as { s: string; c: number; n?: string };
+    const p = f.properties as { s: string; c: number; n?: string; t?: string; lots?: number };
     const el = document.createElement("div");
     el.className = "popup";
     const title = document.createElement("strong");
-    title.textContent = p.s === "lta" ? "LTA bike rack" : p.n || "Bike parking";
+    title.textContent = p.n || (p.s === "lta" ? "LTA bike rack" : "Bike parking");
     const sub = document.createElement("div");
-    sub.textContent = `${p.c ? "Sheltered · " : ""}${p.s === "lta" ? "official LTA data" : "from OpenStreetMap"}`;
+    sub.textContent = [p.t && !(p.n ?? "").startsWith(p.t) ? p.t : "", p.lots ? `${p.lots} lots` : "", p.c ? "sheltered" : "",
+      p.s === "lta" ? "LTA" : "OpenStreetMap"].filter(Boolean).join(" · ");
     el.append(title, sub);
     new maplibregl.Popup({ closeButton: false }).setLngLat(at).setDOMContent(el).addTo(this.map);
   }
 
+  private parking: GeoJSON.Feature[] = [];
+
   async setPois(pois: Poi[]) {
     await this.loaded;
-    (this.map.getSource("pois") as GeoJSONSource).setData({
-      type: "FeatureCollection",
-      features: pois.map((p) => ({ type: "Feature", properties: { k: p.k, n: p.n, s: p.s, c: p.c }, geometry: { type: "Point", coordinates: [p.lon, p.lat] } })),
+    const feature = (p: Poi, i: number): GeoJSON.Feature => ({
+      type: "Feature", properties: { id: i, k: p.k, n: p.n, s: p.s, c: p.c, t: p.t, lots: p.lots },
+      geometry: { type: "Point", coordinates: [p.lon, p.lat] },
     });
+    const all = pois.map(feature);
+    this.parking = all.filter((f) => f.properties!.k === "parking");
+    (this.map.getSource("pois") as GeoJSONSource).setData({ type: "FeatureCollection", features: all.filter((f) => f.properties!.k !== "parking") });
+    await this.setParkingFocus(this.focus);
+  }
+
+  private focus: number[] | null = null;
+
+  /**
+   * Which parking to draw. With a route: only spots within reach of it (ids from the router),
+   * from further out. Without: everything, clustered, once you zoom in to street level.
+   */
+  async setParkingFocus(ids: number[] | null) {
+    await this.loaded;
+    this.focus = ids;
+    const keep = ids ? new Set(ids) : null;
+    (this.map.getSource("parking") as GeoJSONSource).setData({
+      type: "FeatureCollection",
+      features: keep ? this.parking.filter((f) => keep.has(f.properties!.id)) : this.parking,
+    });
+    const minzoom = ids ? ROUTE_PARKING_MINZOOM : BROWSE_PARKING_MINZOOM;
+    for (const id of PARKING_LAYERS) this.map.setLayerZoomRange(id, id.endsWith("label") ? Math.max(minzoom, 14.5) : minzoom, 24);
   }
 
   async setRoutes(routes: RouteResult[], selected: number) {
@@ -178,6 +257,10 @@ export class MapView {
       geometry: { type: "Point" as const, coordinates: [leg.to.lon, leg.to.lat] },
     })) : [];
     (this.map.getSource("stops") as GeoJSONSource).setData({ type: "FeatureCollection", features: stops });
+    (this.map.getSource("lights") as GeoJSONSource).setData({
+      type: "FeatureCollection",
+      features: (r?.lights ?? []).map((ll) => ({ type: "Feature" as const, properties: {}, geometry: { type: "Point" as const, coordinates: ll } })),
+    });
   }
 
   async setDone(coords: LonLat[]) {

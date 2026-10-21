@@ -19,8 +19,8 @@ Full feature list: [docs/FEATURES.md](docs/FEATURES.md). Decisions: [KICKOFF.md]
 
 Phases 0–2 are built and running locally, plus a first slice of 3 (device-based save and share,
 no sign-in yet) and of 5 (ride mode with leg timer, private ride history). Not deployed yet.
-Golden routes pass. The open data gap is parking density (see docs/DATA.md): add the LTA DataMall
-bicycle-parking API (needs a free AccountKey).
+Golden routes pass. Parking now comes from LTA DataMall (27k racks and yellow boxes; key in the
+git-ignored .env). The remaining gaps are inside some parks and along the Changi coast (docs/DATA.md).
 
 ## Phase 0: Data spike
 

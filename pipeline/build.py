@@ -11,6 +11,7 @@ Outputs
 """
 import json
 import math
+import re
 import shutil
 import struct
 import subprocess
@@ -185,6 +186,40 @@ def match_fraction(lines, targets, distance):
     hits = np.bincount(owner[hit_pts], minlength=len(lines))
     totals = np.bincount(owner, minlength=len(lines))
     return hits / np.maximum(totals, 1)
+
+
+# ---------------------------------------------------------------- parking names
+
+RACK_TYPES = {"HDB_RACKS": "HDB rack", "MRT_RACKS": "MRT rack", "NPARKS_RACKS": "NParks rack",
+              "PA_RACKS": "Community club rack", "Yellow Box": "Yellow box", "URA_RACKS": "URA rack",
+              "SPORTSG_RACKS": "ActiveSG rack"}
+
+
+def rack_kind(rack_type: str) -> str:
+    """"HDB_RACKS" -> "HDB rack", "TTC_YELLOWBOX" -> "Yellow box", "TEMASEK POLY_RACKS" -> "Temasek Poly rack"."""
+    if rack_type in RACK_TYPES:
+        return RACK_TYPES[rack_type]
+    if "YELLOW" in rack_type.upper():
+        return "Yellow box"
+    owner = rack_type.rsplit("_", 1)[0].strip()
+    if not owner or owner.upper() == "RACKS":
+        return "Bike rack"
+    # Acronyms (NEA, JTC, MCCY) stay upper case; names (TEMASEK POLY) become title case.
+    words = [w.upper() if len(w) <= 3 or not re.search(r"[AEIOU]", w.upper()) else w.title() for w in owner.split()]
+    return f"{' '.join(words)} rack"
+
+
+def parking_label(desc: str, rack_type: str) -> str:
+    """DataMall descriptions are often a postal code plus an index ("440078-1"); make them readable."""
+    kind = rack_kind(rack_type)
+    desc = (desc or "").strip()
+    m = re.fullmatch(r"(\d{6})(?:-\d+)?", desc)
+    if m:
+        return f"{kind} · S{m.group(1)}"
+    if not desc:
+        return kind
+    pretty = re.sub(r"\s+\d+$", "", desc).title().replace("Mrt", "MRT").replace("Lrt", "LRT").replace("Hdb", "HDB").replace(" Cc", " CC")
+    return pretty if kind.lower() in pretty.lower() or kind in ("Bike rack", "MRT rack") else f"{kind} · {pretty}"
 
 
 # ---------------------------------------------------------------- graph
@@ -364,6 +399,13 @@ def main():
         desc = f["properties"].get("Description", "")
         pois.append({"kind": "parking", "lon": lon, "lat": lat, "name": "LTA bicycle rack", "src": "lta",
                      "covered": "SHLTR_IND</th> <td>Yes" in desc})
+    datamall = gov / "datamall_bicycle_parking.json"
+    if datamall.exists():
+        # Every public rack and yellow box: all carry LTA's QR code, so shared bikes may park there.
+        for p in json.loads(datamall.read_text()):
+            pois.append({"kind": "parking", "lon": p["lon"], "lat": p["lat"], "src": "lta", "prio": 0,
+                         "name": parking_label(p["name"], p["type"]), "covered": p["sheltered"],
+                         "type": rack_kind(p["type"]), "lots": p["count"]})
     for f in json.loads((gov / "hawker_centres.geojson").read_text())["features"]:
         p = f["properties"]
         if (p.get("STATUS") or "Existing").lower().startswith("existing"):
@@ -385,7 +427,8 @@ def main():
 
     # Dedupe parking within 10 m, preferring official LTA racks
     out_pois, seen = [], []
-    order = sorted(range(len(pois)), key=lambda i: (pois[i]["kind"], pois[i]["src"] != "lta"))
+    # DataMall first (fullest records), then the older LTA rack dataset, then OSM.
+    order = sorted(range(len(pois)), key=lambda i: (pois[i]["kind"], pois[i].get("prio", 1 if pois[i]["src"] == "lta" else 2)))
     seen_tree_pts = defaultdict(list)
     for i in order:
         if i not in snapped:
@@ -398,9 +441,14 @@ def main():
             continue
         seen_tree_pts[cell].append((x, y))
         node, d = snapped[i]
-        out_pois.append({"k": p["kind"], "lon": round(p["lon"], 6), "lat": round(p["lat"], 6),
-                         "n": p.get("name", ""), "s": p["src"], "c": int(p.get("covered", False)),
-                         "node": node, "walk": round(float(d))})
+        poi = {"k": p["kind"], "lon": round(p["lon"], 6), "lat": round(p["lat"], 6),
+               "n": p.get("name", ""), "s": p["src"], "c": int(p.get("covered", False)),
+               "node": node, "walk": round(float(d))}
+        if p.get("type"):
+            poi["t"] = p["type"]
+        if p.get("lots"):
+            poi["lots"] = p["lots"]
+        out_pois.append(poi)
     kinds = Counter(p["k"] for p in out_pois)
     log(f"  POIs kept: {dict(kinds)}")
 
@@ -487,6 +535,11 @@ def write_data_md(r):
         f"{SNAP_MAX_M} m of the rideable network)", "",
         *[f"- {k}: {v}" for k, v in r["pois"].items()],
         f"- parking by source: {r['parking_by_source']}", "",
+        "## Parking: what's missing and how to fill it", "",
+        "Shared bikes may park at any public bike rack or yellow box (LTA put its QR code on all of them).",
+        "The complete list is LTA DataMall's `BicycleParkingv2` API; set `LTA_DATAMALL_KEY` (free, from",
+        "https://datamall.lta.gov.sg) and rerun `data/fetch.py --skip-osm`, then the pipeline.",
+        "The HelloRide/Anywheel apps' data isn't published, and copying it out of the apps would break their terms.", "",
     ]
     (ROOT / "docs" / "DATA.md").write_text("\n".join(lines))
 

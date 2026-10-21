@@ -6,19 +6,28 @@ import { router } from "./routerClient.ts";
 // ------------------------------------------------------------------ settings
 
 export interface Settings {
+  version: number;
   operator: Me["operator"];
   capMinutes: number;
   speedKmh: number;
   footpathAversion: number;
   crossingAversion: number;
+  /** Adjust estimates to the pace of your own recorded rides. */
+  learnPace: boolean;
 }
 
 const SETTINGS_KEY = "kayuh.settings";
-const DEFAULTS: Settings = { operator: "helloride", capMinutes: 30, speedKmh: 15, footpathAversion: 0.5, crossingAversion: 0.5 };
+const SETTINGS_VERSION = 2;
+const DEFAULTS: Settings = {
+  version: SETTINGS_VERSION, operator: "helloride", capMinutes: 30, speedKmh: 13, footpathAversion: 0.5, crossingAversion: 0.5, learnPace: true,
+};
 
 function loadSettings(): Settings {
   try {
-    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}") };
+    const stored = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}") as Partial<Settings>;
+    // v1 defaulted to 15 km/h; the calibrated default for rental bikes is 13.
+    if ((stored.version ?? 1) < 2 && stored.speedKmh === 15) stored.speedKmh = 13;
+    return { ...DEFAULTS, ...stored, version: SETTINGS_VERSION };
   } catch {
     return DEFAULTS;
   }
@@ -39,10 +48,30 @@ export function updateSettings(patch: Partial<Settings>) {
   }
 }
 
+/** Your pace compared with the model, learned from recorded rides (null until there are enough). */
+export const pace = signal<{ factor: number; rides: number } | null>(null);
+
+const MIN_PACE_RIDES = 2;
+
+export function refreshPace() {
+  api.rides().then((rides) => {
+    const ratios = rides
+      .filter((r) => r.source === "recorded" && r.predictedS && r.predictedS >= 300)
+      .slice(0, 10)
+      .map((r) => r.timeS / r.predictedS!)
+      .sort((a, b) => a - b);
+    if (ratios.length < MIN_PACE_RIDES) return void (pace.value = null);
+    // Median, clamped: one long coffee stop shouldn't rewrite every estimate.
+    const mid = ratios[Math.floor(ratios.length / 2)];
+    pace.value = { factor: Math.min(1.8, Math.max(0.7, mid)), rides: ratios.length };
+  }).catch(() => {});
+}
+
 export const prefs = computed<Prefs>(() => ({
   speedKmh: settings.value.speedKmh,
   footpathAversion: settings.value.footpathAversion,
   crossingAversion: settings.value.crossingAversion,
+  paceFactor: settings.value.learnPace && pace.value ? pace.value.factor : 1,
 }));
 
 /** The per-ride limit, or null for your own bike. */
@@ -107,6 +136,15 @@ export function removePoint(i: number) {
   const next = points.value.slice();
   if (next.length <= 2) next[i] = null;
   else next.splice(i, 1);
+  points.value = next;
+  savedRouteId.value = null;
+}
+
+/** Move a point (start, stop or end) to another slot; the others keep their order. */
+export function movePoint(from: number, to: number) {
+  const next = points.value.slice();
+  const [p] = next.splice(from, 1);
+  next.splice(to, 0, p);
   points.value = next;
   savedRouteId.value = null;
 }

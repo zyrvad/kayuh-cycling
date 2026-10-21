@@ -3,7 +3,7 @@ import { haversine, type Instruction, type LonLat, type Poi, type RouteResult } 
 import { api } from "../api.ts";
 import type { MapView } from "../map.ts";
 import { router } from "../routerClient.ts";
-import { cap, current, mode, points, routeName, savedRouteId, screen, settings, showToast } from "../state.ts";
+import { cap, current, mode, points, prefs, refreshPace, routeName, savedRouteId, screen, settings, showToast } from "../state.ts";
 import { clock, encodePolyline, km, OPERATOR_NAMES, timeOfDay } from "../util.ts";
 import { Muted, Speaker, Train, Turn } from "./Icons.tsx";
 
@@ -134,8 +134,11 @@ export function Ride({ map }: { map: MapView | null }) {
         name: routeName().slice(0, 80), routeId: savedRouteId.value, riddenAt: startedAt.current.toISOString(),
         distanceM: Math.round(Math.max(progress, SIM ? route.distanceM : progress)), timeS: Math.round((Date.now() - startedAt.current.getTime()) / 1000),
         tierM: route.tierM.map(Math.round), polyline: encodePolyline(route.coords.slice(0, idxRef.current + 1).length > 1 ? route.coords.slice(0, idxRef.current + 1) : route.coords),
-        source: "planned",
+        // A GPS-followed ride teaches Kayuh your pace; a simulated one doesn't.
+        source: SIM ? "planned" : "recorded",
+        predictedS: Math.round((route.timeS / (prefs.value.paceFactor ?? 1)) * Math.min(1, progress / route.distanceM)),
       });
+      refreshPace();
       showToast("Ride saved to your history (private)");
     } catch (e) {
       showToast(`Ride ended, but couldn't be saved: ${e instanceof Error ? e.message : "offline?"}`);

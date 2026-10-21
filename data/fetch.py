@@ -1,9 +1,12 @@
 """Download Kayuh's raw inputs into data/raw/.
 
-Usage: .venv/bin/python data/fetch.py [--skip-osm]
+Usage: .venv/bin/python data/fetch.py [--skip-osm] [--only-datamall]
+(LTA_DATAMALL_KEY is read from the environment or the git-ignored .env file.)
 
 - OpenStreetMap: Geofabrik malaysia-singapore-brunei extract (cut to SG later by the pipeline).
 - data.gov.sg GeoJSON datasets, via the poll-download endpoint.
+- LTA DataMall bicycle parking (racks + yellow boxes), when LTA_DATAMALL_KEY is set.
+  Register for a free AccountKey at https://datamall.lta.gov.sg.
 """
 import json
 import sys
@@ -70,6 +73,81 @@ def fetch_gov() -> None:
     (GOV / "manifest.json").write_text(json.dumps(manifest, indent=2))
 
 
+DATAMALL_URL = "https://datamall2.mytransport.sg/ltaodataservice/BicycleParkingv2"
+DATAMALL_RADIUS_KM = 0.8
+DATAMALL_STEP_KM = 1.0  # grid spacing; circles of 0.8 km overlap enough to cover every square
+DATAMALL_PAGE = 500
+
+
+def parse_datamall(value: list) -> list:
+    """DataMall BicycleParkingv2 rows -> our parking records (racks and yellow boxes)."""
+    out = []
+    for v in value:
+        try:
+            lat, lon = float(v["Latitude"]), float(v["Longitude"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        out.append({
+            "lat": lat, "lon": lon,
+            "name": (v.get("Description") or "").strip(),
+            "type": (v.get("RackType") or "").strip(),
+            "count": int(v.get("RackCount") or 0),
+            "sheltered": (v.get("ShelterIndicator") or "").upper().startswith("Y"),
+        })
+    return out
+
+
+def fetch_datamall_parking(key: str) -> None:
+    """Every public bike rack and yellow box: the places shared bikes may legally be parked.
+
+    The API answers "parking within X km of a point", so sweep a grid over Singapore's land.
+    """
+    import shapely
+    boundary = shapely.from_wkt((RAW / "sg_boundary.wkt").read_text())
+    minx, miny, maxx, maxy = boundary.bounds
+    dlat = DATAMALL_STEP_KM / 111.32
+    dlon = dlat / 0.9997  # cos(1.35 deg)
+    seen, rows = set(), []
+    calls = 0
+
+    def query(lat: float, lon: float, radius_km: float, depth: int = 0) -> None:
+        nonlocal calls
+        for attempt in range(5):
+            r = session.get(DATAMALL_URL, params={"Lat": f"{lat:.6f}", "Long": f"{lon:.6f}", "Dist": radius_km},
+                            headers={"AccountKey": key, "accept": "application/json"}, timeout=30)
+            if r.status_code != 429:
+                break
+            time.sleep(5 * (attempt + 1))
+        r.raise_for_status()
+        calls += 1
+        value = r.json().get("value", [])
+        # DataMall pages long answers at 500 rows: split a crowded circle into four smaller ones.
+        if len(value) >= DATAMALL_PAGE and depth < 4:
+            off = radius_km / 2 / 111.32
+            for dy, dx in ((-1, -1), (-1, 1), (1, -1), (1, 1)):
+                query(lat + dy * off, lon + dx * off, radius_km * 0.6, depth + 1)
+            return
+        for p in parse_datamall(value):
+            k = (round(p["lat"], 5), round(p["lon"], 5))
+            if k not in seen:
+                seen.add(k)
+                rows.append(p)
+        time.sleep(0.05)
+
+    lat = miny
+    while lat <= maxy:
+        lon = minx
+        while lon <= maxx:
+            if shapely.contains_xy(boundary, lon, lat):
+                query(lat, lon, DATAMALL_RADIUS_KM)
+            lon += dlon
+        lat += dlat
+        print(f"  datamall: {lat:.3f}/{maxy:.3f}, {len(rows)} so far", flush=True)
+    GOV.mkdir(parents=True, exist_ok=True)
+    (GOV / "datamall_bicycle_parking.json").write_text(json.dumps(rows))
+    print(f"datamall: {len(rows)} parking places from {calls} calls")
+
+
 def fetch_osm() -> None:
     out = RAW / "msb-latest.osm.pbf"
     with session.get(OSM_URL, stream=True, timeout=600) as r:
@@ -80,7 +158,26 @@ def fetch_osm() -> None:
     print(f"osm: {out.stat().st_size / 1e6:.0f} MB")
 
 
+def load_env() -> None:
+    """Read KEY=value lines from the repo's git-ignored .env into os.environ."""
+    import os
+    env = RAW.parent.parent / ".env"
+    if env.exists():
+        for line in env.read_text().splitlines():
+            if "=" in line and not line.lstrip().startswith("#"):
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip())
+
+
 if __name__ == "__main__":
-    fetch_gov()
-    if "--skip-osm" not in sys.argv:
+    import os
+    load_env()
+    if "--only-datamall" not in sys.argv:
+        fetch_gov()
+    key = os.environ.get("LTA_DATAMALL_KEY")
+    if key:
+        fetch_datamall_parking(key)
+    else:
+        print("datamall: skipped (set LTA_DATAMALL_KEY to fetch every rack and yellow box)")
+    if "--skip-osm" not in sys.argv and "--only-datamall" not in sys.argv:
         fetch_osm()

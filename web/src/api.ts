@@ -49,6 +49,8 @@ export type NewRoute = Omit<SavedRoute, "id" | "shareToken" | "updatedAt">;
 export interface Ride {
   id: string; routeId: string | null; name: string; riddenAt: string; distanceM: number; timeS: number;
   tierM: number[]; polyline: string; source: "planned" | "recorded" | "gpx"; visibility: "private" | "crew";
+  /** Kayuh's base-model estimate for the part actually ridden, for pace learning. */
+  predictedS: number | null;
 }
 export interface Me { operator: "helloride" | "anywheel" | "own"; capMinutes: number; speedKmh: number; signedIn: boolean }
 
@@ -63,7 +65,7 @@ export const api = {
   shareRoute: (id: string) => req<{ token: string }>("POST", `/api/routes/${id}/share`),
   shared: (token: string) => req<{ route: SavedRoute }>("GET", `/api/share/${token}`).then((r) => r.route),
   rides: () => req<{ rides: Ride[] }>("GET", "/api/rides").then((r) => r.rides),
-  logRide: (r: Omit<Ride, "id" | "visibility" | "routeId"> & { routeId?: string | null }) => req<{ id: string }>("POST", "/api/rides", r),
+  logRide: (r: Omit<Ride, "id" | "visibility" | "routeId" | "predictedS"> & { routeId?: string | null; predictedS?: number | null }) => req<{ id: string }>("POST", "/api/rides", r),
   setRideVisibility: (id: string, visibility: Ride["visibility"]) => req("PATCH", `/api/rides/${id}`, { visibility }),
   deleteRide: (id: string) => req("DELETE", `/api/rides/${id}`),
 };

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { api, type Ride, type SavedRoute } from "../api.ts";
 import {
-  loopKm, mode, points, routerInfo, savedRouteId, screen, settings, showToast, updateSettings, type Settings,
+  loopKm, mode, pace, points, routerInfo, savedRouteId, screen, settings, showToast, updateSettings, type Settings,
 } from "../state.ts";
 import { duration, km, OPERATOR_NAMES } from "../util.ts";
 import { Page, TabBar, TierBar } from "./common.tsx";
@@ -144,6 +144,18 @@ export function MeTab() {
             <Slider label="Free minutes per ride (your pass)" k="capMinutes" min={15} max={60} step={5} format={(v) => `${v} min`} />
           )}
           <Slider label="Cruising speed" k="speedKmh" min={8} max={25} step={1} format={(v) => `${v} km/h`} />
+          <label class="row between toggle">
+            <span class="stack-2">
+              <span>Learn my pace from rides</span>
+              <span class="muted small">
+                {pace.value
+                  ? `Your last ${pace.value.rides} GPS rides took ${pace.value.factor.toFixed(2)}× Kayuh's estimate${s.learnPace ? ", so estimates are adjusted." : "."}`
+                  : "After two rides followed with GPS, estimates adjust to how fast you really go."}
+              </span>
+            </span>
+            <input type="checkbox" checked={s.learnPace} onChange={(e) => updateSettings({ learnPace: (e.target as HTMLInputElement).checked })} />
+          </label>
+          <p class="muted small">Estimates include about 40 s at each set of traffic lights and 1.5 min to re-park between legs. They come out around 1.5–2× Google Maps' cycling times.</p>
         </section>
         <section class="group">
           <h2>Route preferences</h2>

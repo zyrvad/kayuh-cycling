@@ -170,6 +170,7 @@ function rideOut(r: Record<string, string | number>) {
   return {
     id: r.id, routeId: r.route_id ?? null, name: r.name, riddenAt: r.ridden_at, distanceM: r.distance_m,
     timeS: r.time_s, tierM: JSON.parse(r.tier_m as string), polyline: r.polyline, source: r.source, visibility: r.visibility,
+    predictedS: r.predicted_s ?? null,
   };
 }
 
@@ -183,10 +184,10 @@ app.post("/api/rides", async (c) => {
   const b = rideBody(await body(c));
   const id = crypto.randomUUID();
   await c.env.DB.prepare(
-    `INSERT INTO rides (id, user_id, route_id, name, ridden_at, distance_m, time_s, tier_m, polyline, source, visibility)
-     VALUES (?, ?, (SELECT id FROM routes WHERE id = ? AND user_id = ?), ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO rides (id, user_id, route_id, name, ridden_at, distance_m, time_s, tier_m, polyline, source, visibility, predicted_s)
+     VALUES (?, ?, (SELECT id FROM routes WHERE id = ? AND user_id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(id, c.var.userId, b.routeId, c.var.userId, b.name, b.riddenAt, b.distanceM, b.timeS, JSON.stringify(b.tierM),
-    b.polyline, b.source, b.visibility).run();
+    b.polyline, b.source, b.visibility, b.predictedS).run();
   return c.json({ id }, 201);
 });
 

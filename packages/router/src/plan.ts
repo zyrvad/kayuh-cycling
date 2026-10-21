@@ -1,10 +1,12 @@
 import { Searcher, type Step } from "./astar.ts";
 import { bearing, haversine, offset, turnAngle, type LonLat } from "./geo.ts";
 import {
-  edgeCoords, edgeName, nearestNode, nodeLL, N_CROSSING, N_SIGNAL, PCN, ROAD, TIERS, type Graph,
+  edgeCoords, edgeName, nearestNode, nodeLL, PCN, ROAD, TIERS, type Graph,
 } from "./graph.ts";
 import type { Poi, PoiIndex, PoiKind } from "./pois.ts";
-import { costModel, DEFAULT_PREFS, edgeTime, nodeTime, type CostModel, type Prefs, type ProfileName } from "./profile.ts";
+import {
+  costModel, DEFAULT_PREFS, REPARK_S, traverse, WALK_MS, type CostModel, type Prefs, type ProfileName,
+} from "./profile.ts";
 
 /** Seconds kept in reserve per leg so a slow patch doesn't push you over the free ride limit. */
 export const LEG_SAFETY_S = 150;
@@ -79,10 +81,16 @@ export interface RouteResult {
   /** Cumulative distance at each coord, metres. */
   cumM: number[];
   distanceM: number;
-  timeS: number;
   /** Metres per tier (pcn, cycleway, shared, footpath, quiet_road, road). */
   tierM: number[];
+  /** Riding time including waits at lights, crossings and re-parks between legs (seconds). */
+  timeS: number;
+  /** Walking between your points and the parking at either end (seconds), not in timeS. */
+  walkS: number;
+  /** Number of sets of traffic lights you wait at. */
   signals: number;
+  /** Where those lights are. */
+  lights: LonLat[];
   crossings: number;
   segments: TierSegment[];
   legs: Leg[];
@@ -114,7 +122,7 @@ function parkingStop(ctx: PlanContext, [lon, lat]: LonLat, kind: "start" | "end"
 }
 
 export function parkingName(p: Poi): string {
-  const base = p.s === "lta" ? "LTA bike rack" : p.n || "Bike parking";
+  const base = p.n || (p.s === "lta" ? "LTA bike rack" : "Bike parking");
   return p.c ? `${base} (sheltered)` : base;
 }
 
@@ -140,16 +148,8 @@ function routeThrough(ctx: PlanContext, nodes: number[], cm: CostModel): Step[] 
 
 const stepEnd = (g: Graph, s: Step) => (s.backward ? g.edgeFrom[s.edge] : g.edgeTo[s.edge]);
 
-/** Cumulative seconds at the end of each step. */
-function timeline(g: Graph, steps: Step[], prefs: Prefs): number[] {
-  const out: number[] = [];
-  let t = 0;
-  for (const s of steps) {
-    t += edgeTime(g, s.edge, prefs) + nodeTime(g, stepEnd(g, s));
-    out.push(t);
-  }
-  return out;
-}
+/** Cumulative seconds at the end of each step, waits included. */
+const timeline = (g: Graph, steps: Step[], prefs: Prefs): number[] => traverse(g, steps, prefs).times;
 
 interface ParkCandidate { poi: Poi; stepIndex: number; timeS: number; score: number }
 
@@ -176,19 +176,25 @@ function parkingCandidates(ctx: PlanContext, steps: Step[], times: number[], min
   return [...best.values()];
 }
 
-/** Legal parking reachable within the budget along the route, best first. */
-function parkingAlong(ctx: PlanContext, steps: Step[], times: number[], budgetS: number, prefs: Prefs): ParkCandidate | null {
+/**
+ * Legal parking reachable within the budget along the route, best first: stops near the end of
+ * the budget ranked by amenities, then everything else from furthest to nearest.
+ */
+function parkingAlong(ctx: PlanContext, steps: Step[], times: number[], budgetS: number, prefs: Prefs): ParkCandidate[] {
   // A stop must make real progress, otherwise the parking we just left would qualify.
   const all = parkingCandidates(ctx, steps, times, Math.min(MIN_LEG_S, budgetS * 0.2), budgetS, prefs);
-  if (!all.length) return null;
+  if (!all.length) return [];
   // Don't stop absurdly early: aim for stops in the last part of the budget.
   const usable = all.filter((c) => c.timeS >= budgetS * 0.45);
   const pool = usable.length ? usable : all;
   const maxT = Math.max(...pool.map((c) => c.timeS));
-  return pool
-    .filter((c) => c.timeS >= maxT - LEG_CHOICE_WINDOW_S)
-    .sort((a, b) => b.score - a.score || b.timeS - a.timeS)[0];
+  const best = pool.filter((c) => c.timeS >= maxT - LEG_CHOICE_WINDOW_S).sort((a, b) => b.score - a.score || b.timeS - a.timeS);
+  const rest = all.filter((c) => !best.includes(c)).sort((a, b) => b.timeS - a.timeS);
+  return [...best, ...rest];
 }
+
+/** How many candidate stops to actually route to before settling for an over-limit leg. */
+const MAX_STOP_TRIES = 6;
 
 /** The first parking after the budget runs out: the least-bad place to end an over-limit leg. */
 function firstParkingAfter(ctx: PlanContext, steps: Step[], times: number[], budgetS: number, prefs: Prefs): ParkCandidate | null {
@@ -238,26 +244,37 @@ export function planRoute(ctx: PlanContext, req: PlanRequest, profile: ProfileNa
       if (total > cap) warnings.push(`The last leg runs over your free ${req.capMinutes} min.`);
       break;
     }
-    const pick = parkingAlong(ctx, steps, times, budget, prefs)
-      ?? parkingAlong(ctx, steps, times, cap, prefs)
-      ?? firstParkingAfter(ctx, steps, times, cap, prefs);
-    if (!pick || pick.poi.node === end.node) {
-      warnings.push(`No legal parking along the rest of the route; the last leg runs over your free ${req.capMinutes} min.`);
-      legSteps.push({ steps, from: cur.stop, to: end.stop, overCap: true });
-      break;
+    // Candidates are judged on the through-route; the real leg to a stop can differ a little
+    // (a detour into a car park, extra turns), so check the actual leg before accepting it.
+    const ranked = [...parkingAlong(ctx, steps, times, budget, prefs), ...parkingAlong(ctx, steps, times, cap, prefs)]
+      .filter((c, i, arr) => c.poi.node !== end.node && arr.findIndex((o) => o.poi.id === c.poi.id) === i);
+    let chosen: { pick: ParkCandidate; leg: Step[]; legTime: number; reached: number } | null = null;
+    const tryStop = (pick: ParkCandidate) => {
+      // Vias reached before the stop are part of this leg.
+      const reached = viasReached(g, steps, vias.map((v) => v.node), pick.stepIndex);
+      const leg = routeThrough(ctx, [cur.node, ...vias.slice(0, reached).map((v) => v.node), pick.poi.node], cm);
+      return { pick, leg, legTime: timeline(g, leg, prefs).at(-1) ?? 0, reached };
+    };
+    for (const pick of ranked.slice(0, MAX_STOP_TRIES)) {
+      const t = tryStop(pick);
+      if (t.legTime <= cap) { chosen = t; break; }
     }
-    if (pick.timeS > cap) {
-      warnings.push(`No legal parking within ${req.capMinutes} min after ${cur.stop.name || "the start"}: leg ${legSteps.length + 1} runs about ${Math.ceil((pick.timeS - cap) / 60)} min over.`);
+    if (!chosen) {
+      const after = firstParkingAfter(ctx, steps, times, cap, prefs);
+      if (!after || after.poi.node === end.node) {
+        warnings.push(`No legal parking along the rest of the route; the last leg runs over your free ${req.capMinutes} min.`);
+        legSteps.push({ steps, from: cur.stop, to: end.stop, overCap: true });
+        break;
+      }
+      chosen = tryStop(after);
+      warnings.push(`No legal parking within ${req.capMinutes} min after ${cur.stop.name || "the start"}: leg ${legSteps.length + 1} runs about ${Math.ceil((chosen.legTime - cap) / 60)} min over.`);
     }
-    // Vias reached before the stop are part of this leg.
-    const reached = viasReached(g, steps, vias.map((v) => v.node), pick.stepIndex);
+    const { pick, leg, legTime, reached } = chosen;
     const parkNode = pick.poi.node;
-    const leg = routeThrough(ctx, [cur.node, ...vias.slice(0, reached).map((v) => v.node), parkNode], cm);
     const parkStop: Stop = {
       kind: "park", lon: pick.poi.lon, lat: pick.poi.lat, name: parkingName(pick.poi), parking: pick.poi,
       amenities: ctx.pois.amenitiesNear(pick.poi.lon, pick.poi.lat),
     };
-    const legTime = timeline(g, leg, prefs).at(-1) ?? 0;
     legSteps.push({ steps: leg, from: cur.stop, to: parkStop, overCap: legTime > cap });
     vias = vias.slice(reached);
     cur = { node: parkNode, stop: parkStop };
@@ -285,11 +302,16 @@ function assemble(
   const segments: TierSegment[] = [];
   const legs: Leg[] = [];
   const allSteps: Step[] = [];
-  let signals = 0, crossings = 0, timeS = 0, dist = 0;
+  const lights: LonLat[] = [];
+  let crossings = 0, timeS = 0, dist = 0;
 
   for (const ls of legSteps) {
     const startIndex = Math.max(0, coords.length - 1);
-    let legDist = 0, legTime = 0;
+    let legDist = 0;
+    const tr = traverse(g, ls.steps, prefs);
+    const legTime = tr.times.at(-1) ?? 0;
+    for (const n of tr.lights) lights.push(nodeLL(g, n));
+    crossings += tr.crossings;
     if (!coords.length) {
       coords.push([ls.from.lon, ls.from.lat]);
       cumM.push(0);
@@ -308,21 +330,21 @@ function assemble(
       else segments.push({ tier, from: segFrom, to: coords.length - 1 });
       tierM[tier] += g.edgeLen[s.edge];
       legDist += g.edgeLen[s.edge];
-      const end = stepEnd(g, s);
-      legTime += edgeTime(g, s.edge, prefs) + nodeTime(g, end);
-      if (g.nodeFlags[end] & N_SIGNAL) signals++;
-      else if (g.nodeFlags[end] & N_CROSSING) crossings++;
     }
     allSteps.push(...ls.steps);
     legs.push({ from: ls.from, to: ls.to, distanceM: legDist, timeS: legTime, overCap: ls.overCap, startIndex, endIndex: coords.length - 1 });
     dist += legDist;
     timeS += legTime;
   }
+  // Each stop between legs costs a re-park: lock, scan, end the ride, unlock again.
+  timeS += Math.max(0, legs.length - 1) * REPARK_S;
+  const walkS = ((legs[0]?.from.walkM ?? 0) + (legs.at(-1)?.to.walkM ?? 0)) / WALK_MS;
   if (tierM[ROAD] > 0.25 * dist && dist > 500) warnings.push("More than a quarter of this route is on roads.");
 
   return {
-    profile, coords, cumM, distanceM: dist, timeS, tierM, signals, crossings, segments, legs,
-    instructions: instructions(g, allSteps, legs, cumM), warnings, steps: allSteps,
+    profile, coords, cumM, distanceM: dist, timeS, walkS, tierM, signals: lights.length, lights, crossings, segments, legs,
+    instructions: instructions(g, allSteps, legs, cumM, new Set(lights.map(([lon, lat]) => `${lon},${lat}`))),
+    warnings, steps: allSteps,
   };
 }
 
@@ -333,7 +355,7 @@ function headingAt(pts: LonLat[], atEnd: boolean): number {
   return bearing(a[0], a[1], b[0], b[1]);
 }
 
-function instructions(g: Graph, steps: Step[], legs: Leg[], cumM: number[]): Instruction[] {
+function instructions(g: Graph, steps: Step[], legs: Leg[], cumM: number[], lightAt: Set<string>): Instruction[] {
   const out: Instruction[] = [];
   if (!steps.length) return out;
   const first = edgeName(g, steps[0].edge);
@@ -349,7 +371,7 @@ function instructions(g: Graph, steps: Step[], legs: Leg[], cumM: number[]): Ins
     const node = stepEnd(g, a);
     const [lon, lat] = nodeLL(g, node);
     const onto = nameB ? ` onto ${nameB}` : "";
-    const lights = g.nodeFlags[node] & N_SIGNAL ? " at the lights" : "";
+    const lights = lightAt.has(`${lon},${lat}`) ? " at the lights" : "";
     const abs = Math.abs(angle);
     let ins: Instruction | null = null;
     if (abs >= 150) ins = { type: "uturn", text: `Make a U-turn${onto}`, atM, lon, lat };

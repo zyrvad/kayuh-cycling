@@ -60,3 +60,14 @@ def test_upgrade_promotes_paths_not_roads():
     assert upgrade(road, pcn_match=True, cycle_match=True).tier == ROAD
     pcn = classify({"highway": "footway", "leisure": "park_connector"})
     assert upgrade(pcn, pcn_match=False, cycle_match=True).tier == PCN
+
+
+def test_parking_labels_are_readable():
+    from build import parking_label, rack_kind
+    assert parking_label("440078-1", "HDB_RACKS") == "HDB rack · S440078"
+    assert parking_label("MARINE TERRACE MRT 1", "MRT_RACKS") == "Marine Terrace MRT"
+    assert parking_label("TAMPINES EAST CC", "PA_RACKS") == "Community club rack · Tampines East CC"
+    assert rack_kind("TTC_YELLOWBOX") == "Yellow box"
+    assert rack_kind("TEMASEK POLY_RACKS") == "Temasek Poly rack"
+    assert rack_kind("MCCY_RACKS") == "MCCY rack"
+    assert rack_kind("NEA_RACKS") == "NEA rack"

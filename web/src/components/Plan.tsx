@@ -3,15 +3,39 @@ import type { RouteResult } from "@kayuh/router";
 import { api, type NewRoute } from "../api.ts";
 import { router } from "../routerClient.ts";
 import {
-  addStop, cap, current, loopKm, mode, pickIndex, planError, planning, points, prefs, removePoint, results,
+  addStop, cap, current, loopKm, mode, movePoint, pickIndex, planError, planning, points, prefs, removePoint, results,
   reverseRoute, routeName, savedRouteId, screen, selected, settings, sharedName, showToast,
 } from "../state.ts";
 import { duration, encodePolyline, km, OPERATOR_NAMES } from "../util.ts";
 import { TierBar } from "./common.tsx";
-import { Back, Bookmark, Close, Plus, Share, Swap, Timer, Watch } from "./Icons.tsx";
+import { Back, Bookmark, Close, Grip, Plus, Share, Swap, Timer, Watch } from "./Icons.tsx";
 import { SearchSheet } from "./SearchSheet.tsx";
 
 const PROFILE_LABEL = { nicest: "Nicest", balanced: "Balanced", direct: "Direct" } as const;
+const PROFILE_NOTE = {
+  nicest: "Stays on park connectors and cycling paths wherever it can, even if that's longer.",
+  balanced: "Takes some footpaths and quiet roads when they save real distance.",
+  direct: "The shortest legal way: more roads, footpaths and lights.",
+} as const;
+
+const pct = (r: RouteResult, ...tiers: number[]) => Math.round((100 * tiers.reduce((a, t) => a + r.tierM[t], 0)) / Math.max(1, r.distanceM));
+
+/** What the selected option is for, and what it trades against the nicest one. */
+function explainOption(r: RouteResult, all: RouteResult[]): string {
+  const nicest = all.find((x) => x.profile === "nicest");
+  if (!nicest || nicest === r) {
+    return all.length > 1 ? PROFILE_NOTE.nicest : `${PROFILE_NOTE.nicest} The other options found the same route here.`;
+  }
+  const dKm = (r.distanceM - nicest.distanceM) / 1000;
+  const dMin = Math.round((r.timeS - nicest.timeS) / 60);
+  const parts = [
+    `${dKm < 0 ? "" : "+"}${dKm.toFixed(1)} km`,
+    dMin === 0 ? "same time" : `${dMin < 0 ? "" : "+"}${dMin} min`,
+    `PCN and cycling paths ${pct(nicest, 0, 1)}% → ${pct(r, 0, 1)}%`,
+  ];
+  if (r.tierM[5] > 50) parts.push(`${pct(r, 5)}% on roads`);
+  return `${PROFILE_NOTE[r.profile]} Compared with Nicest: ${parts.join(", ")}.`;
+}
 const AMENITY_LABEL: Record<string, string> = { water: "water", toilet: "toilet", hawker: "hawker centre", mrt: "MRT", bike_shop: "bike shop" };
 
 function toNewRoute(r: RouteResult): NewRoute {
@@ -71,22 +95,73 @@ async function sendToWatch(r: RouteResult) {
   showToast("GPX downloaded: import it in Huawei Health (Me › My route) or Zepp");
 }
 
+/** Where row `i` should sit while row `from` is being dragged to `to`. */
+function shiftFor(i: number, from: number, to: number, rowH: number): number {
+  if (i === from) return 0;
+  if (from < to && i > from && i <= to) return -rowH;
+  if (from > to && i >= to && i < from) return rowH;
+  return 0;
+}
+
 function PointRows({ onEdit }: { onEdit: (i: number) => void }) {
   const pts = points.value;
   const isLoop = mode.value === "loop";
   const rows = isLoop ? pts.slice(0, 1) : pts;
+  const [drag, setDrag] = useState<{ from: number; dy: number; rowH: number } | null>(null);
+  const target = drag ? Math.max(0, Math.min(rows.length - 1, drag.from + Math.round(drag.dy / drag.rowH))) : -1;
+  const canDrag = !isLoop && rows.length > 1;
+
+  const onDown = (i: number) => (e: PointerEvent) => {
+    // Keep our own handle on the element: e.currentTarget is cleared once this handler returns.
+    const el = e.currentTarget as HTMLElement;
+    const row = el.closest(".point-row") as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    const startY = e.clientY;
+    const rowH = row.offsetHeight + 2;
+    setDrag({ from: i, dy: 0, rowH });
+    const move = (ev: PointerEvent) => setDrag({ from: i, dy: ev.clientY - startY, rowH });
+    const up = (ev: PointerEvent) => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      el.removeEventListener("pointercancel", up);
+      const to = Math.max(0, Math.min(rows.length - 1, i + Math.round((ev.clientY - startY) / rowH)));
+      setDrag(null);
+      if (to !== i) movePoint(i, to);
+    };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+  };
+
   return (
     <div class="point-rows">
       {rows.map((p, i) => {
+        // Kinds follow the slot, so a stop dragged to the top becomes the start.
         const kind = i === 0 ? "start" : i === rows.length - 1 ? "end" : "via";
         const empty = kind === "start" ? "Choose start" : kind === "end" ? "Choose destination" : "Choose a stop";
+        const style = drag
+          ? { transform: `translateY(${i === drag.from ? drag.dy : shiftFor(i, drag.from, target, drag.rowH)}px)`, transition: i === drag.from ? "none" : "transform 120ms ease" }
+          : undefined;
         return (
-          <div key={i} class="point-row">
+          <div key={i} class={drag?.from === i ? "point-row dragging" : "point-row"} style={style}>
             <span class={`dot dot-${kind}`} />
             <button class={p ? "point-label" : "point-label empty"} onClick={() => onEdit(i)}>
               {pickIndex.value === i ? "Tap the map…" : p?.label ?? empty}
             </button>
-            {kind === "via" && <button class="mini-btn" aria-label="Remove stop" onClick={() => removePoint(i)}><Close size={16} /></button>}
+            {(rows.length > 2 || p) && (
+              <button class="mini-btn" aria-label={rows.length > 2 ? `Remove ${p?.label ?? empty}` : `Clear ${p?.label ?? empty}`}
+                onClick={() => removePoint(i)}><Close size={16} /></button>
+            )}
+            {canDrag && (
+              <button class="mini-btn grip" aria-label={`Move ${p?.label ?? empty}: drag, or use the arrow keys`}
+                onPointerDown={onDown(i)}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowUp" && i > 0) { e.preventDefault(); movePoint(i, i - 1); }
+                  if (e.key === "ArrowDown" && i < rows.length - 1) { e.preventDefault(); movePoint(i, i + 1); }
+                }}>
+                <Grip />
+              </button>
+            )}
           </div>
         );
       })}
@@ -145,15 +220,17 @@ export function Plan() {
                 {results.value.map((alt, i) => (
                   <button key={i} class={i === selected.value ? "seg active" : "seg"} aria-pressed={i === selected.value}
                     onClick={() => (selected.value = i)}>
-                    {isLoop ? `${km(alt.distanceM)} km` : PROFILE_LABEL[alt.profile]}
+                    <span class="seg-title">{isLoop ? `Loop ${i + 1}` : PROFILE_LABEL[alt.profile]}</span>
+                    <span class="seg-sub">{km(alt.distanceM)} km · {duration(alt.timeS)}</span>
                   </button>
                 ))}
               </div>
             )}
+            {!isLoop && <p class="option-note">{explainOption(r, results.value)}</p>}
             <div class="stats">
               <div><span class="big">{km(r.distanceM)}</span><span class="unit"> km</span></div>
               <div><span class="big">{duration(r.timeS).replace(" min", "")}</span><span class="unit">{r.timeS < 3600 ? " min" : ""}</span></div>
-              <div class="muted">{r.signals} traffic light{r.signals === 1 ? "" : "s"}</div>
+              <div class="muted">{r.signals} traffic light{r.signals === 1 ? "" : "s"}{r.walkS >= 60 ? ` · +${Math.round(r.walkS / 60)} min walk` : ""}</div>
             </div>
             <TierBar tierM={r.tierM} labels />
             {capMin && (

@@ -17,6 +17,10 @@ export interface Poi {
   node: number;
   /** Metres from the POI to that node. */
   walk: number;
+  /** Parking type, e.g. "Yellow box", "HDB rack" (LTA DataMall). */
+  t?: string;
+  /** Number of bicycle lots. */
+  lots?: number;
   /** Index in the list, assigned on load. */
   id?: number;
 }

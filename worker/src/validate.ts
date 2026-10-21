@@ -104,6 +104,7 @@ export function rideBody(v: unknown) {
     tierM: tierM(o),
     polyline: polyline(o),
     source: oneOf(o, "source", ["planned", "recorded", "gpx"] as const),
+    predictedS: o.predictedS === undefined || o.predictedS === null ? null : num(o, "predictedS", 0, 100_000),
     // Rides are private unless the rider explicitly shares them.
     visibility: o.visibility === undefined ? "private" : oneOf(o, "visibility", VISIBILITY),
   };
