@@ -209,8 +209,13 @@ app.patch("/api/routes/:id", async (c) => {
 });
 
 app.delete("/api/routes/:id", async (c) => {
-  const res = await c.env.DB.prepare("DELETE FROM routes WHERE id = ? AND user_id = ?")
-    .bind(c.req.param("id"), c.var.userId).run();
+  const db = c.env.DB;
+  const id = c.req.param("id");
+  // Remove crew shares explicitly too (don't rely on cascades) so a deleted route vanishes everywhere.
+  const [, res] = await db.batch([
+    db.prepare("DELETE FROM crew_routes WHERE route_id = (SELECT id FROM routes WHERE id = ? AND user_id = ?)").bind(id, c.var.userId),
+    db.prepare("DELETE FROM routes WHERE id = ? AND user_id = ?").bind(id, c.var.userId),
+  ]);
   return res.meta.changes ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);
 });
 

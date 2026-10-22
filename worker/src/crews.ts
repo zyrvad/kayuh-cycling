@@ -2,7 +2,7 @@
 import type { Hono, Next } from "hono";
 import type { App, Ctx } from "./index.ts";
 import { trimEnds } from "./polyline.ts";
-import { crewNameBody, groupRideBody, joinBody, jsonBody, rsvpBody } from "./validate.ts";
+import { crewNameBody, crewRouteBody, groupRideBody, joinBody, jsonBody, rsvpBody } from "./validate.ts";
 
 const body = (c: Ctx) => jsonBody(c.req);
 
@@ -140,12 +140,16 @@ export function registerCrews(app: Hono<App>) {
     const role = await membership(c, id);
     if (!role) return notFound(c);
     const db = c.env.DB;
-    await db.prepare("DELETE FROM crew_members WHERE crew_id = ? AND user_id = ?").bind(id, c.var.userId).run();
+    await db.batch([
+      db.prepare("DELETE FROM crew_members WHERE crew_id = ? AND user_id = ?").bind(id, c.var.userId),
+      db.prepare("DELETE FROM crew_routes WHERE crew_id = ? AND shared_by = ?").bind(id, c.var.userId),
+    ]);
     const next = await db.prepare("SELECT user_id FROM crew_members WHERE crew_id = ? ORDER BY joined_at, rowid LIMIT 1").bind(id).first<{ user_id: string }>();
     if (!next) {
       await db.batch([
         db.prepare("DELETE FROM rsvps WHERE ride_id IN (SELECT id FROM group_rides WHERE crew_id = ?)").bind(id),
         db.prepare("DELETE FROM group_rides WHERE crew_id = ?").bind(id),
+        db.prepare("DELETE FROM crew_routes WHERE crew_id = ?").bind(id),
         db.prepare("DELETE FROM crews WHERE id = ?").bind(id),
       ]);
     } else if (role === "owner") {
@@ -172,6 +176,52 @@ export function registerCrews(app: Hono<App>) {
         rider: r.display_name || String(r.email).split("@")[0], mine: r.user_id === c.var.userId,
       })),
     });
+  });
+
+  // ------------------------------------------------------------------ routes shared with the crew
+
+  app.post("/api/crews/:id/routes", async (c) => {
+    const crewId = c.req.param("id");
+    if (!(await membership(c, crewId))) return notFound(c);
+    const b = crewRouteBody(await body(c));
+    const route = await c.env.DB.prepare("SELECT id FROM routes WHERE id = ? AND user_id = ?").bind(b.routeId, c.var.userId).first();
+    if (!route) return c.json({ error: "You can only share your own saved routes" }, 404);
+    await c.env.DB.prepare(
+      `INSERT INTO crew_routes (crew_id, route_id, shared_by, note) VALUES (?, ?, ?, ?)
+       ON CONFLICT (crew_id, route_id) DO UPDATE SET note = excluded.note, shared_at = datetime('now')`,
+    ).bind(crewId, b.routeId, c.var.userId, b.note).run();
+    return c.json({ ok: true }, 201);
+  });
+
+  app.get("/api/crews/:id/routes", async (c) => {
+    const crewId = c.req.param("id");
+    const role = await membership(c, crewId);
+    if (!role) return notFound(c);
+    const { results } = await c.env.DB.prepare(
+      `SELECT r.id, r.name, r.mode, r.profile, r.points, r.prefs, r.distance_m, r.time_s, r.tier_m, r.legs, r.polyline,
+              s.note, s.shared_at, s.shared_by, u.display_name, u.email
+         FROM crew_routes s JOIN routes r ON r.id = s.route_id JOIN users u ON u.id = s.shared_by
+        WHERE s.crew_id = ? ORDER BY s.shared_at DESC LIMIT 100`,
+    ).bind(crewId).all<Row>();
+    return c.json({
+      routes: results.map((r) => ({
+        id: r.id, name: r.name, mode: r.mode, profile: r.profile,
+        points: JSON.parse(r.points as string), prefs: JSON.parse(r.prefs as string),
+        distanceM: r.distance_m, timeS: r.time_s, tierM: JSON.parse(r.tier_m as string), legs: r.legs, polyline: r.polyline,
+        note: r.note ?? null, sharedAt: r.shared_at, sharedBy: r.display_name || String(r.email).split("@")[0],
+        mine: r.shared_by === c.var.userId, canRemove: r.shared_by === c.var.userId || role === "owner",
+      })),
+    });
+  });
+
+  app.delete("/api/crews/:id/routes/:routeId", async (c) => {
+    const crewId = c.req.param("id");
+    const role = await membership(c, crewId);
+    if (!role) return notFound(c);
+    const res = await c.env.DB.prepare(
+      "DELETE FROM crew_routes WHERE crew_id = ? AND route_id = ? AND (shared_by = ? OR ? = 'owner')",
+    ).bind(crewId, c.req.param("routeId"), c.var.userId, role).run();
+    return res.meta.changes ? c.json({ ok: true }) : notFound(c);
   });
 
   // ------------------------------------------------------------------ group rides

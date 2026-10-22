@@ -23,8 +23,21 @@ export interface PlanContext {
 }
 
 export function createContext(graph: Graph, pois: PoiIndex): PlanContext {
+  // A POI snapped to a one-way dead end (outside the strongly connected core) would strand the
+  // next leg. Re-attach it to the nearest core path within a short walk, if there is one.
+  for (const p of pois.all) {
+    if (graph.coreNode[p.node]) continue;
+    const hit = nearestNode(graph, p.lon, p.lat, { nice: true, core: true, maxM: 150 });
+    if (hit) {
+      p.node = hit.node;
+      p.walk = Math.round(hit.dist);
+    }
+  }
   return { graph, pois, searcher: new Searcher(graph) };
 }
+
+/** Usable as a stop: on the core, so every other core node can be reached from it and back. */
+const usable = (g: Graph, p: Poi) => g.coreNode[p.node] === 1;
 
 export interface PlanRequest {
   /** Start, optional via points, end. For a loop, start and end are the same point. */
@@ -106,7 +119,7 @@ export class PlanError extends Error {}
 // ------------------------------------------------------------ endpoints
 
 function parkingStop(ctx: PlanContext, [lon, lat]: LonLat, kind: "start" | "end"): { node: number; stop: Stop } | null {
-  const near = ctx.pois.near(lon, lat, PARKING_SEARCH_M, "parking");
+  const near = ctx.pois.near(lon, lat, PARKING_SEARCH_M, "parking").filter(({ poi }) => usable(ctx.graph, poi));
   if (!near.length) return null;
   // Prefer sheltered or official racks when they are only slightly further away.
   const best = near
@@ -127,7 +140,9 @@ export function parkingName(p: Poi): string {
 }
 
 function pointStop(ctx: PlanContext, ll: LonLat, kind: Stop["kind"]): { node: number; stop: Stop } {
-  const hit = nearestNode(ctx.graph, ll[0], ll[1], { nice: true, maxM: 300 })
+  // Prefer the connected core; fall back to anything nearby (e.g. a route entirely on Pulau Ubin).
+  const hit = nearestNode(ctx.graph, ll[0], ll[1], { nice: true, core: true, maxM: 300 })
+    ?? nearestNode(ctx.graph, ll[0], ll[1], { core: true, maxM: 1500 })
     ?? nearestNode(ctx.graph, ll[0], ll[1], { maxM: 3000 });
   if (!hit) throw new PlanError("That point is too far from any rideable path.");
   const [lon, lat] = nodeLL(ctx.graph, hit.node);
@@ -163,6 +178,7 @@ function parkingCandidates(ctx: PlanContext, steps: Step[], times: number[], min
     if (times[i] < minS) continue;
     const [lon, lat] = nodeLL(g, stepEnd(g, steps[i]));
     for (const { poi, dist } of ctx.pois.near(lon, lat, ALONG_ROUTE_M, "parking")) {
+      if (!usable(g, poi)) continue;
       const timeS = times[i] + (dist * 1.4) / speed;
       if (timeS > budgetS) continue;
       const prev = best.get(poi.id!);
@@ -439,8 +455,8 @@ export function planLoops(ctx: PlanContext, req: LoopRequest, count = 3): RouteR
   for (let h = 0; h < 360; h += 45) {
     const a = offset(origin[0], origin[1], side, h);
     const b = offset(origin[0], origin[1], side, h + 60);
-    const na = nearestNode(g, a[0], a[1], { nice: true, maxM: 800 });
-    const nb = nearestNode(g, b[0], b[1], { nice: true, maxM: 800 });
+    const na = nearestNode(g, a[0], a[1], { nice: true, core: true, maxM: 800 });
+    const nb = nearestNode(g, b[0], b[1], { nice: true, core: true, maxM: 800 });
     if (!na || !nb) continue;
     const corners = [nodeLL(g, na.node), nodeLL(g, nb.node)];
     let r: RouteResult;

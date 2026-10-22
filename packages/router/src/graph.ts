@@ -33,6 +33,12 @@ export interface Graph {
   adjEntry: Uint32Array;
   /** True if the node touches at least one non-road edge. */
   niceNode: Uint8Array;
+  /**
+   * 1 if the node is in the largest strongly connected part of the network: you can ride from
+   * it to everywhere else in that part and back. Stops snap only to these, so a one-way dead end
+   * (say, a service road into a car park) can never strand the next leg.
+   */
+  coreNode: Uint8Array;
   grid: { lon0: number; lat0: number; cols: number; rows: number; cellStart: Uint32Array; cellNodes: Uint32Array };
 }
 
@@ -68,7 +74,7 @@ export function parseGraph(buf: ArrayBuffer): Graph {
   return finishGraph({ nodeCount, edgeCount, nodeLon, nodeLat, nodeFlags, edgeFrom, edgeTo, edgeLen, edgeTier, edgeFlags, edgeName, edgeReason, geomStart, coords, strings });
 }
 
-type RawGraph = Omit<Graph, "adjStart" | "adjEntry" | "niceNode" | "grid">;
+type RawGraph = Omit<Graph, "adjStart" | "adjEntry" | "niceNode" | "coreNode" | "grid">;
 
 /** Build adjacency, the nice-node mask and the spatial grid. Also used by tests with hand-made graphs. */
 export function finishGraph(g: RawGraph): Graph {
@@ -113,7 +119,63 @@ export function finishGraph(g: RawGraph): Graph {
   const cellNodes = new Uint32Array(nodeCount);
   for (let i = 0; i < nodeCount; i++) cellNodes[cursor[cellOf[i]]++] = i;
 
-  return { ...g, adjStart, adjEntry, niceNode, grid: { lon0: minLon, lat0: minLat, cols, rows, cellStart, cellNodes } };
+  const coreNode = largestScc(g, adjStart, adjEntry);
+  return { ...g, adjStart, adjEntry, niceNode, coreNode, grid: { lon0: minLon, lat0: minLat, cols, rows, cellStart, cellNodes } };
+}
+
+/** Kosaraju's algorithm, iterative (the graph is too big for recursion). Marks the largest SCC. */
+function largestScc(g: RawGraph, adjStart: Uint32Array, adjEntry: Uint32Array): Uint8Array {
+  const n = g.nodeCount;
+  const target = (entry: number) => (entry & 1 ? g.edgeFrom[entry >>> 1] : g.edgeTo[entry >>> 1]);
+  // Pass 1: finish order on the forward graph.
+  const order = new Uint32Array(n);
+  let filled = 0;
+  const seen = new Uint8Array(n);
+  const stackNode = new Uint32Array(n), stackPos = new Uint32Array(n);
+  for (let s = 0; s < n; s++) {
+    if (seen[s]) continue;
+    let top = 0;
+    stackNode[0] = s; stackPos[0] = adjStart[s]; seen[s] = 1;
+    while (top >= 0) {
+      const u = stackNode[top];
+      if (stackPos[top] < adjStart[u + 1]) {
+        const v = target(adjEntry[stackPos[top]++]);
+        if (!seen[v]) { seen[v] = 1; top++; stackNode[top] = v; stackPos[top] = adjStart[v]; }
+      } else {
+        order[filled++] = u;
+        top--;
+      }
+    }
+  }
+  // Reverse adjacency (who can step into each node).
+  const rdeg = new Uint32Array(n + 1);
+  for (let k = 0; k < adjEntry.length; k++) rdeg[target(adjEntry[k]) + 1]++;
+  for (let i = 0; i < n; i++) rdeg[i + 1] += rdeg[i];
+  const rfill = rdeg.slice(0, n), rsrc = new Uint32Array(adjEntry.length);
+  for (let u = 0; u < n; u++) for (let k = adjStart[u]; k < adjStart[u + 1]; k++) rsrc[rfill[target(adjEntry[k])]++] = u;
+  // Pass 2: components on the reverse graph in reverse finish order.
+  const comp = new Int32Array(n).fill(-1);
+  const stack = new Uint32Array(n);
+  let best = -1, bestSize = 0, c = 0;
+  for (let i = n - 1; i >= 0; i--) {
+    const s = order[i];
+    if (comp[s] >= 0) continue;
+    let top = 0, size = 0;
+    stack[0] = s; comp[s] = c;
+    while (top >= 0) {
+      const u = stack[top--];
+      size++;
+      for (let k = rdeg[u]; k < rdeg[u + 1]; k++) {
+        const v = rsrc[k];
+        if (comp[v] < 0) { comp[v] = c; stack[++top] = v; }
+      }
+    }
+    if (size > bestSize) { bestSize = size; best = c; }
+    c++;
+  }
+  const core = new Uint8Array(n);
+  for (let i = 0; i < n; i++) if (comp[i] === best) core[i] = 1;
+  return core;
 }
 
 export const nodeLL = (g: Graph, n: number): LonLat => [g.nodeLon[n] / 1e6, g.nodeLat[n] / 1e6];
@@ -150,7 +212,7 @@ export function edgeHeadings(g: Graph, e: number, backward: boolean): [number, n
  * Nearest graph node to a point, searching outward ring by ring.
  * With `nice`, only nodes touching a non-road edge qualify.
  */
-export function nearestNode(g: Graph, lon: number, lat: number, opts: { nice?: boolean; maxM?: number } = {}): { node: number; dist: number } | null {
+export function nearestNode(g: Graph, lon: number, lat: number, opts: { nice?: boolean; core?: boolean; maxM?: number } = {}): { node: number; dist: number } | null {
   const { lon0, lat0, cols, rows, cellStart, cellNodes } = g.grid;
   const maxM = opts.maxM ?? 2000;
   const cx = Math.floor((lon - lon0) / GRID_DEG);
@@ -166,6 +228,7 @@ export function nearestNode(g: Graph, lon: number, lat: number, opts: { nice?: b
         for (let k = cellStart[c]; k < cellStart[c + 1]; k++) {
           const n = cellNodes[k];
           if (opts.nice && !g.niceNode[n]) continue;
+          if (opts.core && !g.coreNode[n]) continue;
           const d = haversine(lon, lat, g.nodeLon[n] / 1e6, g.nodeLat[n] / 1e6);
           if (d < bestD) { bestD = d; best = n; }
         }

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "preact/hooks";
-import { api, devEmail, type CrewDetail, type CrewRide, type CrewSummary, type GroupRideDetail, type GroupRideSummary, type RsvpStatus } from "../api.ts";
+import { api, devEmail, type CrewDetail, type CrewRide, type CrewRoute, type CrewSummary, type GroupRideDetail, type GroupRideSummary, type RsvpStatus } from "../api.ts";
 import {
   crewView, groupCap, me, mode, openCrew, openGroupRide, points, refreshMe, savedRouteId, screen, sharedName, showToast,
 } from "../state.ts";
 import { duration, km, OPERATOR_NAMES } from "../util.ts";
 import { Page, TabBar, TierBar } from "./common.tsx";
-import { Back, Share } from "./Icons.tsx";
+import { Back, Share, Trash } from "./Icons.tsx";
+import { openSaved } from "./Tabs.tsx";
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("en-SG", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
@@ -146,13 +147,22 @@ function CrewList() {
   );
 }
 
+/** Open a crewmate's route in the planner. Saving it makes your own copy. */
+function openCrewRoute(r: CrewRoute) {
+  openSaved(r);
+  savedRouteId.value = r.mine ? r.id : null;
+  sharedName.value = r.mine ? null : r.name;
+}
+
 function CrewPage({ id }: { id: string }) {
   const [crew, setCrew] = useState<CrewDetail | null>(null);
   const [shared, setShared] = useState<CrewRide[]>([]);
+  const [routes, setRoutes] = useState<CrewRoute[]>([]);
   const [error, setError] = useState<string | null>(null);
   const load = () => {
     api.crew(id).then(setCrew).catch((e) => setError(e.message));
     api.crewRides(id).then(setShared).catch(() => {});
+    api.crewRoutes(id).then(setRoutes).catch(() => {});
   };
   useEffect(load, [id]);
   const invite = crew ? `${location.origin}/join/${crew.inviteCode}` : "";
@@ -180,8 +190,32 @@ function CrewPage({ id }: { id: string }) {
           </section>
 
           <section class="stack-8">
+            <h2 class="section-title">Shared routes</h2>
+            {routes.length === 0 && <p class="muted small">Plan a route, then tap <strong>Share with your crew</strong>. Saved routes have a share button too.</p>}
+            <ul class="list">
+              {routes.map((r) => (
+                <li key={r.id} class="list-card">
+                  <button class="list-main" onClick={() => openCrewRoute(r)}>
+                    <strong>{r.name}</strong>
+                    <span class="muted">{r.mine ? "You" : r.sharedBy} · {km(r.distanceM)} km · {duration(r.timeS)}</span>
+                    {r.note && <span class="notes small">{r.note}</span>}
+                    <TierBar tierM={r.tierM} height={6} />
+                  </button>
+                  {r.canRemove && (
+                    <button class="mini-btn" aria-label={`Remove ${r.name} from ${crew.name}`} onClick={async () => {
+                      if (!confirm(`Remove "${r.name}" from ${crew.name}? It stays in ${r.mine ? "your" : `${r.sharedBy}'s`} saved routes.`)) return;
+                      await api.unshareCrewRoute(id, r.id).catch((e) => showToast(e.message));
+                      load();
+                    }}><Trash /></button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section class="stack-8">
             <h2 class="section-title">Group rides</h2>
-            {crew.rides.length === 0 && <p class="muted">Nothing planned. Plan a route, then tap <strong>Ride this with your crew</strong>.</p>}
+            {crew.rides.length === 0 && <p class="muted">Nothing planned. Share a route, then tap <strong>Plan a group ride with a date</strong>.</p>}
             <ul class="list">{crew.rides.map((r) => <li key={r.id}><RideCard r={r} /></li>)}</ul>
           </section>
 

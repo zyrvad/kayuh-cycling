@@ -76,3 +76,13 @@ export const TIER_SHORT = ["PCN", "Cycling path", "Shared", "Footpath", "Quiet r
 export const TIER_COLORS = ["#17804F", "#2E6BD1", "#6DB98A", "#9AA39E", "#C9A227", "#D9541E"];
 
 export const OPERATOR_NAMES = { helloride: "HelloRide", anywheel: "Anywheel", own: "Own bike" } as const;
+
+/**
+ * App colours follow your bike: HelloRide blue, Anywheel green, Kayuh green for your own bike.
+ * Only the UI accent changes; map tier colours keep their meaning for everyone.
+ */
+export const THEMES = {
+  helloride: { accent: "#1D63D8", deep: "#164FAD", soft: "#E7EFFC", ink: "#123E88", light: "#B8D0F7" },
+  anywheel: { accent: "#12804A", deep: "#0B5E35", soft: "#E5F3EA", ink: "#0B4A2B", light: "#B5E3C8" },
+  own: { accent: "#17804F", deep: "#0F5E39", soft: "#E8F3EC", ink: "#0F4D30", light: "#B9E6CB" },
+} as const;

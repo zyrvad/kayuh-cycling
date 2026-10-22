@@ -5,9 +5,10 @@ import {
 } from "../state.ts";
 import { duration, km, OPERATOR_NAMES } from "../util.ts";
 import { Page, TabBar, TierBar } from "./common.tsx";
-import { Trash } from "./Icons.tsx";
+import { Share, Trash } from "./Icons.tsx";
+import { ShareSheet } from "./ShareSheet.tsx";
 
-export function openSaved(r: SavedRoute) {
+export function openSaved(r: Pick<SavedRoute, "id" | "mode" | "name" | "points" | "distanceM">) {
   // Saved loops carry their corners as stops, so every saved route replays as a fixed A-to-B.
   mode.value = r.mode === "freeform" ? "freeform" : "ab";
   const isLoop = r.mode === "loop";
@@ -30,6 +31,7 @@ function useLoad<T>(load: () => Promise<T>): [T | null, string | null, () => voi
 
 export function RoutesTab() {
   const [routes, error, reload] = useLoad(api.routes);
+  const [sharing, setSharing] = useState<SavedRoute | null>(null);
   return (
     <>
       <Page title="Saved routes">
@@ -43,6 +45,7 @@ export function RoutesTab() {
                 <span class="muted">{km(r.distanceM)} km · {duration(r.timeS)} · {r.legs} leg{r.legs > 1 ? "s" : ""}{r.shareToken ? " · shared" : ""}</span>
                 <TierBar tierM={r.tierM} height={6} />
               </button>
+              <button class="mini-btn accent" aria-label={`Share ${r.name}`} onClick={() => setSharing(r)}><Share size={18} /></button>
               <button class="mini-btn" aria-label={`Delete ${r.name}`} onClick={async () => {
                 if (!confirm(`Delete "${r.name}"?`)) return;
                 await api.deleteRoute(r.id).catch((e) => showToast(e.message));
@@ -53,6 +56,10 @@ export function RoutesTab() {
         </ul>
       </Page>
       <TabBar />
+      {sharing && (
+        <ShareSheet name={sharing.name} routeId={async () => sharing.id} onClose={() => { setSharing(null); reload(); }}
+          summary={`${km(sharing.distanceM)} km · ${duration(sharing.timeS)} · ${sharing.legs} leg${sharing.legs > 1 ? "s" : ""}`} />
+      )}
     </>
   );
 }

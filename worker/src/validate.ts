@@ -152,6 +152,15 @@ export function joinBody(v: unknown) {
   return code;
 }
 
+const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function crewRouteBody(v: unknown) {
+  const o = obj(v);
+  const routeId = str(o, "routeId", 40);
+  if (!ID.test(routeId)) throw new BadRequest("routeId: expected a route id");
+  return { routeId, note: str(o, "note", 200, true) || null };
+}
+
 export function rsvpBody(v: unknown) {
   return oneOf(obj(v), "status", ["going", "maybe", "no"] as const);
 }

@@ -85,3 +85,12 @@ test("Jurong Lake Gardens loop (~6 km)", () => {
   assert.ok(share(best, PCN, CYCLEWAY, SHARED) >= 0.6, `nice ${pct(share(best, PCN, CYCLEWAY, SHARED))}`);
   assert.ok(best.distanceM > 3500 && best.distanceM < 9500, `${best.distanceM} m`);
 });
+
+// Regression (Oct 2026): with the 30-min cap, one stop order failed because a leg stop landed on
+// parking at a one-way dead end. Both orders must plan.
+check("Mediacorp → East Coast Park → NUS High", [[103.7876, 1.2967], [103.9135, 1.3016], [103.7718, 1.3069]], (r) => {
+  assert.ok(r.distanceM > 30000);
+});
+check("Mediacorp → NUS High → East Coast Park", [[103.7876, 1.2967], [103.7718, 1.3069], [103.9135, 1.3016]], (r) => {
+  assert.ok(r.distanceM > 20000);
+});

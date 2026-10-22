@@ -11,6 +11,8 @@
   --accent: #17804F;
   --accent-deep: #0F5E39;
   --accent-soft: #E8F3EC;
+  --accent-ink: #0F4D30;
+  --accent-light: #B9E6CB;
   --blue: #2E6BD1;
   --dark: #1D2A23;
   --warn: #A3400F;
@@ -75,7 +77,7 @@ input { font: inherit; }
 .p-badge.lg { width: 26px; height: 26px; border-radius: 7px; font-size: 13px; }
 
 .banner { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; font-size: 13px; font-weight: 600; }
-.banner.ok { background: var(--accent-soft); color: #0F4D30; }
+.banner.ok { background: var(--accent-soft); color: var(--accent-ink); }
 .banner.info { background: #EAF0FB; color: #1B3F7A; }
 .banner.warn { background: var(--warn-soft); color: var(--warn); }
 
@@ -130,7 +132,7 @@ input { font: inherit; }
 .loop-slider { display: flex; flex-direction: column; gap: 4px; font-size: 14px; padding: 4px 4px 2px; }
 .loop-slider input, .setting input { width: 100%; accent-color: var(--accent); }
 .pick-banner { position: absolute; left: 16px; right: 16px; top: calc(150px + env(safe-area-inset-top, 0px)); z-index: 3; background: var(--ink); color: #FFFFFF; border-radius: 12px; padding: 10px 12px; font-size: 14px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
-.pick-banner .link-btn { color: #B9E6CB; }
+.pick-banner .link-btn { color: var(--accent-light); }
 .plan-sheet { top: 46%; bottom: 0; overflow-y: auto; padding-bottom: calc(96px + var(--safe-bottom)); }
 .plan-sheet.compact { top: auto; padding-bottom: calc(24px + var(--safe-bottom)); }
 .nowrap { white-space: nowrap; }
@@ -252,3 +254,10 @@ input { font: inherit; }
 .crew-cta { height: 44px; font-size: 14px; }
 .form-body { padding: 0 16px 24px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
 a.btn { text-decoration: none; color: inherit; }
+
+/* Share sheet */
+.share-summary { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 14px; background: var(--accent-soft); color: var(--accent-ink); }
+.share-row { padding: 10px 10px 10px 12px; gap: 10px; }
+.share-row .list-main { padding: 0; }
+.share-row .btn { height: 38px; padding: 0 16px; font-size: 14px; }
+.mini-btn.accent { color: var(--accent); }

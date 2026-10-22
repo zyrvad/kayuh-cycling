@@ -82,6 +82,11 @@ export interface GroupRideSummary {
 export type RsvpStatus = "going" | "maybe" | "no";
 export interface CrewDetail { id: string; name: string; role: "owner" | "member"; inviteCode: string; members: CrewMember[]; rides: GroupRideSummary[] }
 export interface CrewRide { id: string; name: string; riddenAt: string; distanceM: number; timeS: number; tierM: number[]; polyline: string; rider: string; mine: boolean }
+export interface CrewRoute {
+  id: string; name: string; mode: SavedRoute["mode"]; profile: SavedRoute["profile"]; points: LonLat[]; prefs: Prefs;
+  distanceM: number; timeS: number; tierM: number[]; legs: number; polyline: string;
+  note: string | null; sharedAt: string; sharedBy: string; mine: boolean; canRemove: boolean;
+}
 export interface GroupRideDetail {
   id: string; crewId: string; crewName: string; title: string; startsAt: string; notes: string | null;
   meet: { name: string; lon: number; lat: number };
@@ -108,6 +113,9 @@ export const api = {
   newInvite: (id: string) => req<{ inviteCode: string }>("POST", `/api/crews/${id}/invite`),
   leaveCrew: (id: string) => req("DELETE", `/api/crews/${id}/members/me`),
   crewRides: (id: string) => req<{ rides: CrewRide[] }>("GET", `/api/crews/${id}/rides`).then((r) => r.rides),
+  crewRoutes: (id: string) => req<{ routes: CrewRoute[] }>("GET", `/api/crews/${id}/routes`).then((r) => r.routes),
+  shareRouteToCrew: (crewId: string, routeId: string, note?: string) => req("POST", `/api/crews/${crewId}/routes`, { routeId, note }),
+  unshareCrewRoute: (crewId: string, routeId: string) => req("DELETE", `/api/crews/${crewId}/routes/${routeId}`),
   planGroupRide: (crewId: string, ride: NewGroupRide) => req<{ id: string }>("POST", `/api/crews/${crewId}/group-rides`, ride),
   groupRides: () => req<{ rides: GroupRideSummary[] }>("GET", "/api/group-rides").then((r) => r.rides),
   groupRide: (id: string) => req<GroupRideDetail>("GET", `/api/group-rides/${id}`),

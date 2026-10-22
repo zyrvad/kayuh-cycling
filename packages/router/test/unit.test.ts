@@ -133,3 +133,21 @@ test("re-parking between legs is added to the total time", () => {
   const legSum = r.legs.reduce((t, l) => t + l.timeS, 0);
   assert.equal(Math.round(r.timeS - legSum), 90 * (r.legs.length - 1));
 });
+
+test("a parking spot on a one-way dead end is never used as a leg stop", () => {
+  // Chain of PCN with a one-way spur into node 21 (you can ride in, not out). Parking on the spur
+  // must be skipped, or the next leg would have nowhere to go.
+  const { nodes, g: chainGraph } = chain();
+  const spur: LonLat = [nodes[13][0], 1.3009];
+  const allNodes = [...nodes, spur];
+  const edges: [number, number, number, number?][] = [];
+  for (let i = 0; i < 20; i++) edges.push([i, i + 1, PCN]);
+  edges.push([13, 21, PCN, F_FWD]);
+  const g = makeGraph(allNodes, edges);
+  assert.equal(g.coreNode[21], 0, "dead end is outside the core");
+  assert.equal(chainGraph.coreNode[5], 1);
+  const pois = new PoiIndex([parking(0, nodes[0]), parking(21, spur), parking(10, nodes[10]), parking(20, nodes[20])]);
+  const r = planRoute(createContext(g, pois), { points: [nodes[0], nodes[20]], capMinutes: 30 }, "nicest");
+  assert.ok(r.legs.every((l) => l.to.parking?.node !== 21));
+  assert.equal(r.legs.at(-1)?.to.parking?.node, 20);
+});

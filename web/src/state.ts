@@ -2,6 +2,7 @@ import { computed, effect, signal } from "@preact/signals";
 import type { LonLat, Prefs, RouteResult } from "@kayuh/router";
 import { api, type Conditions, type Me } from "./api.ts";
 import { router } from "./routerClient.ts";
+import { THEMES } from "./util.ts";
 
 // ------------------------------------------------------------------ settings
 
@@ -38,6 +39,18 @@ effect(() => {
   try {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings.value));
   } catch { /* storage unavailable: settings last for this session */ }
+});
+
+// Apply the operator's colours to the whole app (CSS variables) and the browser/status bar.
+effect(() => {
+  const t = THEMES[settings.value.operator] ?? THEMES.own;
+  const root = document.documentElement.style;
+  root.setProperty("--accent", t.accent);
+  root.setProperty("--accent-deep", t.deep);
+  root.setProperty("--accent-soft", t.soft);
+  root.setProperty("--accent-ink", t.ink);
+  root.setProperty("--accent-light", t.light);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", t.accent);
 });
 
 export function updateSettings(patch: Partial<Settings>) {

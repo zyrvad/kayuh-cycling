@@ -10,6 +10,7 @@ import { duration, encodePolyline, km, OPERATOR_NAMES } from "../util.ts";
 import { Sheet, TierBar } from "./common.tsx";
 import { Back, Bookmark, Close, Grip, Plus, Share, Swap, Timer, Watch } from "./Icons.tsx";
 import { SearchSheet } from "./SearchSheet.tsx";
+import { ShareSheet } from "./ShareSheet.tsx";
 
 const PROFILE_LABEL = { nicest: "Nicest", balanced: "Balanced", direct: "Direct" } as const;
 const PROFILE_NOTE = {
@@ -62,21 +63,8 @@ async function ensureSaved(r: RouteResult): Promise<string> {
   return id;
 }
 
-async function shareRoute(r: RouteResult) {
-  try {
-    const id = await ensureSaved(r);
-    const { token } = await api.shareRoute(id);
-    const url = `${location.origin}/r/${token}`;
-    const text = `${routeName()}: ${km(r.distanceM)} km, ${Math.round((100 * (r.tierM[0] + r.tierM[1])) / r.distanceM)}% on park connectors and cycling paths`;
-    if (navigator.share) await navigator.share({ title: "Kayuh route", text, url }).catch(() => {});
-    else {
-      await navigator.clipboard?.writeText(url);
-      showToast("Share link copied");
-    }
-  } catch (e) {
-    showToast(e instanceof Error ? e.message : "Couldn't share this route");
-  }
-}
+const shareSummary = (r: RouteResult) =>
+  `${km(r.distanceM)} km · ${duration(r.timeS)} · ${Math.round((100 * (r.tierM[0] + r.tierM[1])) / Math.max(1, r.distanceM))}% on park connectors and cycling paths`;
 
 async function sendToWatch(r: RouteResult) {
   const name = routeName();
@@ -179,6 +167,7 @@ function PointRows({ onEdit }: { onEdit: (i: number) => void }) {
 export function Plan() {
   const [editing, setEditing] = useState<number | null>(null);
   const [groupForm, setGroupForm] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const r = current.value;
   const isLoop = mode.value === "loop";
   const capMin = cap.value;
@@ -245,7 +234,7 @@ export function Plan() {
             )}
             {r.warnings.map((w) => <div key={w} class="banner warn">{w}</div>)}
 
-            <button class="btn outline crew-cta" onClick={() => setGroupForm(true)}>Ride this with your crew</button>
+            <button class="btn outline crew-cta" onClick={() => setSharing(true)}><Share size={18} /> Share with your crew</button>
             <ol class="legs" aria-label="Legs">
               <li class="leg start-leg">
                 <div class="leg-rail"><span class="leg-dot start" /><span class="rail" /></div>
@@ -281,12 +270,16 @@ export function Plan() {
             onClick={() => ensureSaved(r).then(() => showToast("Saved to Routes")).catch((e) => showToast(e.message))}>
             <Bookmark fill={savedRouteId.value ? "currentColor" : "none"} />
           </button>
-          <button class="icon-btn outline" aria-label="Share route" onClick={() => shareRoute(r)}><Share /></button>
+          <button class="icon-btn outline" aria-label="Share route" onClick={() => setSharing(true)}><Share /></button>
           <button class="btn outline grow nowrap" onClick={() => sendToWatch(r)}><Watch /> To watch</button>
           <button class="btn primary grow" onClick={() => (screen.value = "ride")}>Start ride</button>
         </div>
       )}
 
+      {sharing && r && (
+        <ShareSheet name={routeName()} summary={shareSummary(r)} routeId={() => ensureSaved(r)}
+          onGroupRide={() => { setSharing(false); setGroupForm(true); }} onClose={() => setSharing(false)} />
+      )}
       {groupForm && r && <GroupRideForm route={r} onClose={() => setGroupForm(false)} />}
       {editing !== null && (
         <SearchSheet index={editing} title={editing === 0 ? "Start" : editing === points.value.length - 1 ? "Destination" : "Stop"}

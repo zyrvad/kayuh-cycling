@@ -159,3 +159,33 @@ test("rotating the invite kills the old link; the last member leaving deletes th
   await call("DELETE", `/api/crews/${crew.id}/members/me`, { as: BOB });
   assert.equal((await call("GET", "/api/crews", { as: BOB })).json.crews.length, 0);
 });
+
+test("share a saved route with the crew; only crewmates see it and the sharer or owner can remove it", async () => {
+  const crew = (await call("POST", "/api/crews", { as: ALICE, body: { name: "Kakis" } })).json;
+  await call("POST", "/api/crews/join", { as: BOB, body: { code: crew.inviteCode } });
+  await call("POST", "/api/crews/join", { as: CAROL, body: { code: crew.inviteCode } });
+  const saved = (await call("POST", "/api/routes", { as: BOB, body: { ...route, mode: "ab", profile: "nicest" } })).json;
+  const alices = (await call("POST", "/api/routes", { as: ALICE, body: { ...route, mode: "ab", profile: "nicest" } })).json;
+
+  assert.equal((await call("POST", `/api/crews/${crew.id}/routes`, { as: BOB, body: { routeId: alices.id } })).status, 404, "can't share someone else's route");
+  assert.equal((await call("POST", `/api/crews/${crew.id}/routes`, { as: BOB, body: { routeId: "nope" } })).status, 400);
+  assert.equal((await call("POST", `/api/crews/${crew.id}/routes`, { as: BOB, body: { routeId: saved.id, note: "Sunset ride?" } })).status, 201);
+  assert.equal((await call("POST", `/api/crews/${crew.id}/routes`, { as: BOB, body: { routeId: saved.id } })).status, 201, "sharing twice is fine");
+
+  const seen = (await call("GET", `/api/crews/${crew.id}/routes`, { as: ALICE })).json.routes;
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].name, "Coast to Changi");
+  assert.deepEqual(seen[0].points, route.points);
+  assert.equal(seen[0].canRemove, true, "Alice owns the crew");
+  assert.equal((await call("GET", `/api/crews/${crew.id}/routes`, { as: CAROL })).json.routes[0].canRemove, false);
+  assert.equal((await call("GET", `/api/crews/${crew.id}/routes`, { as: "dave@example.com" })).status, 404, "outsiders can't see it");
+
+  assert.equal((await call("DELETE", `/api/crews/${crew.id}/routes/${saved.id}`, { as: CAROL })).status, 404);
+  assert.equal((await call("DELETE", `/api/crews/${crew.id}/routes/${saved.id}`, { as: ALICE })).status, 200);
+  assert.equal((await call("GET", `/api/crews/${crew.id}/routes`, { as: BOB })).json.routes.length, 0);
+
+  // Deleting the saved route removes it from the crew too.
+  await call("POST", `/api/crews/${crew.id}/routes`, { as: BOB, body: { routeId: saved.id } });
+  await call("DELETE", `/api/routes/${saved.id}`, { as: BOB });
+  assert.equal((await call("GET", `/api/crews/${crew.id}/routes`, { as: ALICE })).json.routes.length, 0);
+});
