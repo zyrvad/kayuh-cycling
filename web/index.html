@@ -6,7 +6,10 @@
   <meta name="theme-color" content="#17804F">
   <meta name="description" content="Kayuh: cycling routes in Singapore that stay on park connectors and end at legal bike parking.">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <!-- black-translucent: the app draws under the status bar and home indicator instead of iOS adding solid bars.
+       Everything that sits near an edge pads itself with env(safe-area-inset-*). -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
   <title>Kayuh</title>
   <!-- use-credentials: behind Cloudflare Access the manifest needs the sign-in cookie -->
   <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">

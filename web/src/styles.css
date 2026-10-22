@@ -32,7 +32,9 @@ input { font: inherit; }
 :focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
-.app { position: fixed; inset: 0; overflow: hidden; max-width: 560px; margin: 0 auto; }
+.app { position: fixed; inset: 0; overflow: hidden; }
+/* The status bar text is white over the app (black-translucent), so give it a soft shade to sit on. */
+.app::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: calc(env(safe-area-inset-top, 0px) * 1.3); background: linear-gradient(rgba(21, 32, 26, 0.42), rgba(21, 32, 26, 0)); z-index: 40; pointer-events: none; }
 .map { position: absolute; inset: 0; }
 .screen-routes .map, .screen-rides .map, .screen-crew .map, .screen-me .map { visibility: hidden; }
 
@@ -261,3 +263,24 @@ a.btn { text-decoration: none; color: inherit; }
 .share-row .list-main { padding: 0; }
 .share-row .btn { height: 38px; padding: 0 16px; font-size: 14px; }
 .mini-btn.accent { color: var(--accent); }
+
+/* Wider screens (landscape, tablets, foldables): the map fills the screen, the panels stay phone-width. */
+@media (min-width: 600px) {
+  .sheet, .tabbar, .action-bar, .top-stack, .plan-head, .pick-banner, .ride-instruction, .ride-card, .ride-actions, .bailout {
+    max-width: 560px; margin-inline: auto;
+  }
+  .top-stack, .plan-head, .pick-banner, .ride-instruction, .ride-card, .ride-actions, .bailout { max-width: 528px; }
+  .page { padding-inline: max(16px, calc((100% - 528px) / 2)); }
+  .sheet-full > * { width: 100%; max-width: 560px; margin-inline: auto; }
+}
+
+/* Profile pictures */
+.avatar { overflow: hidden; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar.xl { width: 72px; height: 72px; border-radius: 36px; font-size: 28px; }
+.icon-btn.profile { padding: 0; overflow: hidden; }
+.icon-btn.profile .avatar { width: 100%; height: 100%; border-radius: inherit; background: var(--surface); color: var(--accent); font-size: 16px; }
+.photo-picker { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+.photo-picker .link-btn { align-self: flex-start; padding-left: 0; }
+.small-btn { height: 40px; font-size: 14px; position: relative; }
+.btn.disabled { opacity: 0.6; pointer-events: none; }

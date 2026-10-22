@@ -2,7 +2,11 @@ import type { LonLat, Poi, RouteResult } from "@kayuh/router";
 import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, LngLatBoundsLike } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import mapWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import { TIER_COLORS, TIER_LABELS } from "./util.ts";
+
+// MapLibre 6 looks for its tile worker next to its own module, which bundling moves. Point it at the copy Vite ships.
+maplibregl.setWorkerUrl(mapWorkerUrl);
 
 const STYLE = "https://tiles.openfreemap.org/styles/positron";
 const FONT = ["Noto Sans Bold"];

@@ -71,9 +71,11 @@ export interface Ride {
 export interface Me {
   id: string | null; email: string | null; displayName: string | null;
   operator: "helloride" | "anywheel" | "own"; capMinutes: number; speedKmh: number; signedIn: boolean;
+  /** URL of your profile picture, or null. */
+  avatar: string | null;
 }
 export interface CrewSummary { id: string; name: string; role: "owner" | "member"; members: number; nextRide: string | null }
-export interface CrewMember { id: string; name: string; operator: Me["operator"]; capMinutes: number; role: "owner" | "member"; me: boolean }
+export interface CrewMember { id: string; name: string; operator: Me["operator"]; capMinutes: number; role: "owner" | "member"; me: boolean; avatar: string | null }
 export interface GroupRideSummary {
   id: string; crewId: string; crewName?: string; title: string; startsAt: string;
   meet: { name: string; lon: number; lat: number }; distanceM: number; timeS: number; tierM: number[]; legs: number;
@@ -91,7 +93,7 @@ export interface GroupRideDetail {
   id: string; crewId: string; crewName: string; title: string; startsAt: string; notes: string | null;
   meet: { name: string; lon: number; lat: number };
   route: { name: string; points: LonLat[]; prefs: Prefs; distanceM: number; timeS: number; tierM: number[]; legs: number; polyline: string };
-  people: { id: string; name: string; operator: Me["operator"]; capMinutes: number; status: RsvpStatus | null; me: boolean }[];
+  people: { id: string; name: string; operator: Me["operator"]; capMinutes: number; status: RsvpStatus | null; me: boolean; avatar: string | null }[];
   strictestCapMinutes: number | null;
   canDelete: boolean;
 }
@@ -105,6 +107,8 @@ export const api = {
   conditions: ([lon, lat]: LonLat) => req<Conditions>("GET", `/api/conditions?lat=${lat}&lon=${lon}`),
   me: () => req<Me>("GET", "/api/me"),
   saveMe: (me: { operator: Me["operator"]; capMinutes: number; speedKmh: number; displayName?: string }) => req<Me>("PUT", "/api/me", me),
+  setAvatar: (image: string) => req<{ avatar: string }>("PUT", "/api/me/avatar", { image }),
+  removeAvatar: () => req("DELETE", "/api/me/avatar"),
   crews: () => req<{ crews: CrewSummary[] }>("GET", "/api/crews").then((r) => r.crews),
   createCrew: (name: string) => req<{ id: string; inviteCode: string }>("POST", "/api/crews", { name }),
   joinCrew: (code: string) => req<{ crewId: string; name: string }>("POST", "/api/crews/join", { code }),

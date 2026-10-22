@@ -4,7 +4,7 @@ import {
   crewView, groupCap, me, mode, openCrew, openGroupRide, points, refreshMe, savedRouteId, screen, sharedName, showToast,
 } from "../state.ts";
 import { duration, km, OPERATOR_NAMES } from "../util.ts";
-import { Page, TabBar, TierBar } from "./common.tsx";
+import { Avatar, Page, TabBar, TierBar } from "./common.tsx";
 import { Back, Share, Trash } from "./Icons.tsx";
 import { openSaved } from "./Tabs.tsx";
 
@@ -224,7 +224,7 @@ function CrewPage({ id }: { id: string }) {
             <ul class="members">
               {crew.members.map((m) => (
                 <li key={m.id}>
-                  <span class="avatar">{m.name.slice(0, 1).toUpperCase()}</span>
+                  <Avatar name={m.name} url={m.avatar} />
                   <span class="stack-2"><strong>{m.name}{m.me ? " (you)" : ""}</strong>
                     <span class="muted small">{OPERATOR_NAMES[m.operator]}{m.operator !== "own" ? ` · ${m.capMinutes} min free` : ""}{m.role === "owner" ? " · owner" : ""}</span>
                   </span>
@@ -331,7 +331,7 @@ function GroupRidePage({ id }: { id: string }) {
             <ul class="members">
               {ride.people.map((p) => (
                 <li key={p.id}>
-                  <span class={`avatar ${p.status ?? "none"}`}>{p.name.slice(0, 1).toUpperCase()}</span>
+                  <Avatar name={p.name} url={p.avatar} class={p.status ?? "none"} />
                   <span class="stack-2"><strong>{p.name}{p.me ? " (you)" : ""}</strong>
                     <span class="muted small">{p.status ? RSVP_LABEL[p.status] : "No answer yet"} · {OPERATOR_NAMES[p.operator]}</span>
                   </span>

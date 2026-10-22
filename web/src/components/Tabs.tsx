@@ -4,7 +4,7 @@ import {
   loopKm, me, mode, pace, points, refreshMe, routerInfo, savedRouteId, screen, settings, showToast, updateSettings, type Settings,
 } from "../state.ts";
 import { duration, km, OPERATOR_NAMES } from "../util.ts";
-import { Page, TabBar, TierBar } from "./common.tsx";
+import { Avatar, Page, squarePhoto, TabBar, TierBar } from "./common.tsx";
 import { Share, Trash } from "./Icons.tsx";
 import { ShareSheet } from "./ShareSheet.tsx";
 
@@ -182,6 +182,8 @@ function Account() {
   }
   const s = settings.value;
   return (
+    <>
+    <PhotoPicker name={m.displayName || m.email || "Me"} url={m.avatar} />
     <form class="stack-8" onSubmit={async (e) => {
       e.preventDefault();
       await api.saveMe({ operator: s.operator, capMinutes: s.capMinutes, speedKmh: s.speedKmh, displayName: name.trim() })
@@ -196,5 +198,42 @@ function Account() {
         <a class="btn outline grow" href="/cdn-cgi/access/logout">Sign out</a>
       </div>
     </form>
+    </>
+  );
+}
+
+function PhotoPicker({ name, url }: { name: string; url: string | null }) {
+  const [busy, setBusy] = useState(false);
+  const pick = async (e: Event) => {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    setBusy(true);
+    try {
+      await api.setAvatar(await squarePhoto(file));
+      await refreshMe();
+      showToast("Profile picture updated");
+    } catch (err) {
+      showToast(err instanceof Error && err.message ? err.message : "Couldn't use that photo");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div class="photo-picker">
+      <Avatar name={name} url={url} class="xl" />
+      <div class="stack-8 grow">
+        <label class={busy ? "btn outline small-btn disabled" : "btn outline small-btn"}>
+          {busy ? "Uploading…" : url ? "Change photo" : "Add a photo"}
+          <input type="file" accept="image/*" class="sr" disabled={busy} onChange={pick} />
+        </label>
+        {url && !busy && (
+          <button type="button" class="link-btn" onClick={async () => {
+            await api.removeAvatar().then(refreshMe).catch((err) => showToast(err.message));
+          }}>Remove photo</button>
+        )}
+      </div>
+    </div>
   );
 }

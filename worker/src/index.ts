@@ -1,6 +1,7 @@
 import { Hono, type Context, type Next } from "hono";
 import { accessEnforced, requestEmail, type AuthEnv } from "./auth.ts";
 import { getConditions } from "./conditions.ts";
+import { AVATAR_AT, avatarUrl, registerAvatars } from "./avatars.ts";
 import { registerCrews } from "./crews.ts";
 import { searchPlaces } from "./search.ts";
 import {
@@ -138,17 +139,17 @@ async function mergeDevice(db: D1Database, device: string, account: string) {
 }
 
 for (const path of [
-  "/api/me", "/api/routes", "/api/routes/*", "/api/rides", "/api/rides/*", "/api/feedback", "/api/feedback/*",
-  "/api/crews", "/api/crews/*", "/api/group-rides", "/api/group-rides/*",
+  "/api/me", "/api/me/*", "/api/routes", "/api/routes/*", "/api/rides", "/api/rides/*", "/api/feedback", "/api/feedback/*",
+  "/api/crews", "/api/crews/*", "/api/group-rides", "/api/group-rides/*", "/api/avatars/*",
 ]) {
   app.use(path, identify);
 }
 
 app.get("/api/me", async (c) => {
-  const u = await c.env.DB.prepare("SELECT operator, cap_minutes, speed_kmh, display_name FROM users WHERE id = ?")
-    .bind(c.var.userId).first<{ operator: string; cap_minutes: number; speed_kmh: number; display_name: string | null }>();
+  const u = await c.env.DB.prepare(`SELECT operator, cap_minutes, speed_kmh, display_name, ${AVATAR_AT("users")} FROM users WHERE id = ?`)
+    .bind(c.var.userId).first<{ operator: string; cap_minutes: number; speed_kmh: number; display_name: string | null; avatar_at: string | null }>();
   return c.json({
-    id: c.var.account ? c.var.userId : null, email: c.var.email, displayName: u!.display_name,
+    id: c.var.account ? c.var.userId : null, email: c.var.email, displayName: u!.display_name, avatar: avatarUrl(c.var.userId, u!.avatar_at),
     operator: u!.operator, capMinutes: u!.cap_minutes, speedKmh: u!.speed_kmh, signedIn: c.var.account,
   });
 });
@@ -162,6 +163,7 @@ app.put("/api/me", async (c) => {
 });
 
 registerCrews(app);
+registerAvatars(app);
 
 function routeOut(r: Record<string, string | number>) {
   return {

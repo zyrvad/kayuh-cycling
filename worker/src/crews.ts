@@ -1,6 +1,7 @@
 /** Crews (friend groups joined by invite link) and the group rides they plan together. */
 import type { Hono, Next } from "hono";
 import type { App, Ctx } from "./index.ts";
+import { AVATAR_AT, avatarUrl } from "./avatars.ts";
 import { trimEnds } from "./polyline.ts";
 import { crewNameBody, crewRouteBody, groupRideBody, joinBody, jsonBody, rsvpBody } from "./validate.ts";
 
@@ -102,7 +103,7 @@ export function registerCrews(app: Hono<App>) {
     if (!role) return notFound(c);
     const crew = await c.env.DB.prepare("SELECT id, name, invite_code FROM crews WHERE id = ?").bind(id).first<Row>();
     const { results: members } = await c.env.DB.prepare(
-      `SELECT u.id, u.display_name, u.email, u.operator, u.cap_minutes, m.role
+      `SELECT u.id, u.display_name, u.email, u.operator, u.cap_minutes, m.role, ${AVATAR_AT("u")}
          FROM crew_members m JOIN users u ON u.id = m.user_id
         WHERE m.crew_id = ? ORDER BY m.role = 'owner' DESC, m.joined_at, m.rowid`,
     ).bind(id).all<Row>();
@@ -114,7 +115,7 @@ export function registerCrews(app: Hono<App>) {
       id: crew!.id, name: crew!.name, role, inviteCode: crew!.invite_code,
       members: members.map((m) => ({
         id: m.id, name: m.display_name || String(m.email).split("@")[0], operator: m.operator, capMinutes: m.cap_minutes,
-        role: m.role, me: m.id === c.var.userId,
+        role: m.role, me: m.id === c.var.userId, avatar: avatarUrl(m.id, m.avatar_at),
       })),
       rides: rides.map(rideSummary),
     });
@@ -268,7 +269,7 @@ export function registerCrews(app: Hono<App>) {
     const r = await loadRide(c);
     if (!r) return notFound(c);
     const { results: people } = await c.env.DB.prepare(
-      `SELECT u.id, u.display_name, u.email, u.operator, u.cap_minutes, s.status
+      `SELECT u.id, u.display_name, u.email, u.operator, u.cap_minutes, s.status, ${AVATAR_AT("u")}
          FROM crew_members m JOIN users u ON u.id = m.user_id
          LEFT JOIN rsvps s ON s.ride_id = ? AND s.user_id = u.id
         WHERE m.crew_id = ? ORDER BY s.status IS NULL, s.status, u.display_name`,
@@ -285,7 +286,7 @@ export function registerCrews(app: Hono<App>) {
       },
       people: people.map((p) => ({
         id: p.id, name: p.display_name || String(p.email).split("@")[0], operator: p.operator, capMinutes: p.cap_minutes,
-        status: p.status ?? null, me: p.id === c.var.userId,
+        status: p.status ?? null, me: p.id === c.var.userId, avatar: avatarUrl(p.id, p.avatar_at),
       })),
       strictestCapMinutes: caps.length ? Math.min(...caps) : null,
       canDelete: r.created_by === c.var.userId || (await membership(c, r.crew_id as string)) === "owner",

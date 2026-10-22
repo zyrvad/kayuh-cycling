@@ -183,3 +183,24 @@ export function groupRideBody(v: unknown) {
     route,
   };
 }
+
+const AVATAR_MAX_BYTES = 200_000;
+const MAGIC: Record<string, number[]> = {
+  "image/jpeg": [0xff, 0xd8, 0xff],
+  "image/png": [0x89, 0x50, 0x4e, 0x47],
+  "image/webp": [0x52, 0x49, 0x46, 0x46], // "RIFF"
+};
+
+/** A data: URL holding a small image. The bytes must really be that image type, not HTML in disguise. */
+export function avatarBody(v: unknown) {
+  const image = obj(v).image;
+  const m = typeof image === "string" && image.length < AVATAR_MAX_BYTES * 1.4
+    ? /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/.exec(image) : null;
+  if (!m) throw new BadRequest("image: expected a JPEG, PNG or WebP data URL under 200 KB");
+  const [, mime, data] = m;
+  let head: string;
+  try { head = atob(data.slice(0, 16)); } catch { throw new BadRequest("image: bad base64"); }
+  if (!MAGIC[mime].every((b, i) => head.charCodeAt(i) === b)) throw new BadRequest("image: not a valid " + mime.slice(6));
+  if (mime === "image/webp" && head.slice(8, 12) !== "WEBP") throw new BadRequest("image: not a valid webp");
+  return { mime, data };
+}

@@ -2,11 +2,11 @@ import { useEffect, useState } from "preact/hooks";
 import type { LonLat, RouteResult } from "@kayuh/router";
 import { router, type NearbyParking } from "../routerClient.ts";
 import {
-  cap, conditions, groupCap, locate, loopKm, mode, myLocation, pickIndex, points, prefs, refreshConditions, routerInfo,
+  cap, conditions, groupCap, locate, loopKm, me, mode, myLocation, pickIndex, points, prefs, refreshConditions, routerInfo,
   screen, settings, type Mode,
 } from "../state.ts";
 import { duration, km, OPERATOR_NAMES, sunset, TIER_COLORS, timeOfDay } from "../util.ts";
-import { Sheet, TabBar, TierBar } from "./common.tsx";
+import { Avatar, Sheet, TabBar, TierBar } from "./common.tsx";
 import { Layers, Locate, Search } from "./Icons.tsx";
 import { SearchSheet } from "./SearchSheet.tsx";
 import type { MapView } from "../map.ts";
@@ -61,7 +61,9 @@ export function Discover({ map }: { map: MapView | null }) {
           <button class="searchbox as-button" onClick={openSearch}>
             <Search /> <span class="placeholder">Where to? Place or postal code</span>
           </button>
-          <button class="icon-btn raised profile" aria-label="Settings" onClick={() => (screen.value = "me")}>J</button>
+          <button class="icon-btn raised profile" aria-label="Settings and profile" onClick={() => (screen.value = "me")}>
+            <Avatar name={me.value?.displayName || me.value?.email || "Me"} url={me.value?.avatar} />
+          </button>
         </div>
         <div class="chips">
           <button class="chip active" onClick={openSearch}>A to B</button>

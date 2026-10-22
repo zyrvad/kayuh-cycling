@@ -1,5 +1,6 @@
 import type { ComponentChildren } from "preact";
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
+import { authHeaders } from "../api.ts";
 import { screen, type Screen } from "../state.ts";
 import { TIER_COLORS, TIER_SHORT } from "../util.ts";
 import { TabCrew, TabMap, TabMe, TabRides, TabRoutes } from "./Icons.tsx";
@@ -97,4 +98,48 @@ export function Sheet({ class: cls, peek, children }: { class: string; peek: num
       {children}
     </div>
   );
+}
+
+// Pictures are fetched with the app's auth headers (and the browser's HTTP cache), then shown from memory.
+const pictures = new Map<string, Promise<string | null>>();
+function picture(url: string) {
+  let p = pictures.get(url);
+  if (!p) {
+    p = fetch(url, { headers: authHeaders() })
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((b) => (b ? URL.createObjectURL(b) : null))
+      .catch(() => null);
+    pictures.set(url, p);
+  }
+  return p;
+}
+
+/** Someone's profile picture, or their initial until they add one. */
+export function Avatar({ name, url, class: cls = "" }: { name: string; url: string | null | undefined; class?: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    setSrc(null);
+    if (!url) return;
+    let live = true;
+    picture(url).then((s) => live && setSrc(s));
+    return () => { live = false; };
+  }, [url]);
+  return (
+    <span class={`avatar ${cls}`} aria-hidden="true">
+      {src ? <img src={src} alt="" /> : (name.trim().slice(0, 1).toUpperCase() || "?")}
+    </span>
+  );
+}
+
+/** Centre-crop and shrink a photo to a small square JPEG data URL (about 20 KB). */
+export async function squarePhoto(file: File, size = 256): Promise<string> {
+  const bmp = await createImageBitmap(file);
+  const side = Math.min(bmp.width, bmp.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, size, size);
+  bmp.close();
+  return canvas.toDataURL("image/jpeg", 0.85);
 }

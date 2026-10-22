@@ -189,3 +189,34 @@ test("share a saved route with the crew; only crewmates see it and the sharer or
   await call("DELETE", `/api/routes/${saved.id}`, { as: BOB });
   assert.equal((await call("GET", `/api/crews/${crew.id}/routes`, { as: ALICE })).json.routes.length, 0);
 });
+
+test("profile pictures: only accounts upload, only crewmates see them, and they must really be images", async () => {
+  // Smallest valid JPEG header bytes are enough for the magic-number check.
+  const jpeg = "data:image/jpeg;base64," + Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1]).toString("base64");
+  const html = "data:image/jpeg;base64," + Buffer.from("<html><script>alert(1)</script>").toString("base64");
+
+  assert.equal((await call("PUT", "/api/me/avatar", { device: DEVICE, body: { image: jpeg } })).status, 401, "devices can't");
+  assert.equal((await call("PUT", "/api/me/avatar", { as: ALICE, body: { image: html } })).status, 400, "HTML labelled as JPEG");
+  assert.equal((await call("PUT", "/api/me/avatar", { as: ALICE, body: { image: "data:image/svg+xml;base64,PHN2Zz4=" } })).status, 400, "no SVG");
+  const put = await call("PUT", "/api/me/avatar", { as: ALICE, body: { image: jpeg } });
+  assert.equal(put.status, 200);
+  const url = put.json.avatar as string;
+  assert.match(url, /^\/api\/avatars\/[0-9a-f-]+\?v=/);
+  assert.equal((await call("GET", "/api/me", { as: ALICE })).json.avatar, url);
+
+  const img = await app.request(url, { headers: { "X-Dev-Email": ALICE } }, env);
+  assert.equal(img.status, 200);
+  assert.equal(img.headers.get("Content-Type"), "image/jpeg");
+  assert.equal(new Uint8Array(await img.arrayBuffer())[0], 0xff);
+  assert.equal((await app.request(url, { headers: { "X-Dev-Email": BOB } }, env)).status, 404, "strangers can't");
+
+  const crew = (await call("POST", "/api/crews", { as: ALICE, body: { name: "Kakis" } })).json;
+  await call("POST", "/api/crews/join", { as: BOB, body: { code: crew.inviteCode } });
+  assert.equal((await app.request(url, { headers: { "X-Dev-Email": BOB } }, env)).status, 200, "crewmates can");
+  const members = (await call("GET", `/api/crews/${crew.id}`, { as: BOB })).json.members;
+  assert.equal(members.find((m: any) => m.name === "alice").avatar, url);
+  assert.equal(members.find((m: any) => m.name === "bob").avatar, null);
+
+  assert.equal((await call("DELETE", "/api/me/avatar", { as: ALICE })).status, 200);
+  assert.equal((await call("GET", "/api/me", { as: ALICE })).json.avatar, null);
+});
