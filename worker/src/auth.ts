@@ -88,13 +88,15 @@ function cookie(header: string | null, name: string): string | null {
 }
 
 /** The signed-in email for a request, if any. */
+/** True when Cloudflare Access is configured: every per-user request must then carry its token. */
+export const accessEnforced = (env: AuthEnv) => !!(env.ACCESS_TEAM_DOMAIN && env.ACCESS_AUD);
+
 export async function requestEmail(req: Request, env: AuthEnv, fetcher?: CertFetcher): Promise<string | null> {
-  if (env.ACCESS_TEAM_DOMAIN && env.ACCESS_AUD) {
+  if (accessEnforced(env)) {
     const token = req.headers.get("Cf-Access-Jwt-Assertion") ?? cookie(req.headers.get("Cookie"), "CF_Authorization");
-    if (token) {
-      const email = await verifyAccessJwt(token, env.ACCESS_TEAM_DOMAIN, env.ACCESS_AUD, fetcher).catch(() => null);
-      if (email) return email;
-    }
+    if (!token) return null;
+    // With Access configured, the dev header is never honoured, even if DEV_AUTH leaked into vars.
+    return verifyAccessJwt(token, env.ACCESS_TEAM_DOMAIN!, env.ACCESS_AUD!, fetcher).catch(() => null);
   }
   if (env.DEV_AUTH === "1") {
     const dev = (req.headers.get("X-Dev-Email") ?? "").trim().toLowerCase();

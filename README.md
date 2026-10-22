@@ -34,7 +34,12 @@ npm run pipeline
 npm run dev
 ```
 
-Then open http://127.0.0.1:8787. Add `?sim=20` to play ride mode back at 20× speed without GPS.
+Then open http://127.0.0.1:8790 (the `kayuh` preview config). Add `?sim=20` to play ride mode
+back at 20× speed without GPS.
+
+Local sign-in: `wrangler.toml` turns on Cloudflare Access, which doesn't exist locally. Create
+`worker/.dev.vars` (git-ignored) with `DEV_AUTH=1`, `ACCESS_TEAM_DOMAIN=` and `ACCESS_AUD=` (blank).
+Then the Crew tab offers a test sign-in where you can be any email.
 
 The first setup needs a Python 3.12 venv with the pipeline's dependencies:
 

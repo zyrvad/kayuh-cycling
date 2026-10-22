@@ -45,7 +45,7 @@ web/                 Preact app; src/components/* are the Calm screens
 worker/              Hono API + D1 migrations; test/ uses a node:sqlite D1 shim
 ```
 
-Running and testing: see README.md. The preview config is named `kayuh` (wrangler dev on :8787).
+Running and testing: see README.md. The preview config is named `kayuh` (wrangler dev on :8790; lovebox uses 8788).
 
 ## Domain rules (keep these true in code)
 

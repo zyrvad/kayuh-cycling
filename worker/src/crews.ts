@@ -1,6 +1,7 @@
 /** Crews (friend groups joined by invite link) and the group rides they plan together. */
 import type { Hono, Next } from "hono";
 import type { App, Ctx } from "./index.ts";
+import { trimEnds } from "./polyline.ts";
 import { crewNameBody, groupRideBody, joinBody, jsonBody, rsvpBody } from "./validate.ts";
 
 const body = (c: Ctx) => jsonBody(c.req);
@@ -46,7 +47,9 @@ function ics(r: Row, url: string): string {
   const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
   const start = new Date(r.starts_at as string);
   const end = new Date(start.getTime() + Math.max(1800, Number(r.time_s)) * 1000);
-  const esc = (s: string) => s.replace(/[\\,;]/g, (m) => `\\${m}`).replace(/\n/g, "\\n");
+  // Escape per RFC 5545, and turn every kind of line break into a literal \n so user text
+  // (titles, notes) can't start new calendar fields.
+  const esc = (s: string) => s.replace(/[\\,;]/g, (m) => `\\${m}`).replace(/\r\n|\r|\n/g, "\\n");
   return [
     "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Kayuh//Group ride//EN", "BEGIN:VEVENT",
     `UID:${r.id}@kayuh`, `DTSTAMP:${fmt(new Date())}`, `DTSTART:${fmt(start)}`, `DTEND:${fmt(end)}`,
@@ -164,7 +167,8 @@ export function registerCrews(app: Hono<App>) {
     return c.json({
       rides: results.map((r) => ({
         id: r.id, name: r.name, riddenAt: r.ridden_at, distanceM: r.distance_m, timeS: r.time_s,
-        tierM: JSON.parse(r.tier_m as string), polyline: r.polyline,
+        // Never send the first and last 200 m: that's where people's homes are.
+        tierM: JSON.parse(r.tier_m as string), polyline: trimEnds(r.polyline as string),
         rider: r.display_name || String(r.email).split("@")[0], mine: r.user_id === c.var.userId,
       })),
     });

@@ -1,5 +1,5 @@
 import { Hono, type Context, type Next } from "hono";
-import { requestEmail, type AuthEnv } from "./auth.ts";
+import { accessEnforced, requestEmail, type AuthEnv } from "./auth.ts";
 import { getConditions } from "./conditions.ts";
 import { registerCrews } from "./crews.ts";
 import { searchPlaces } from "./search.ts";
@@ -25,6 +25,21 @@ app.onError((err, c) => {
   if (err instanceof BadRequest) return c.json({ error: err.message }, 400);
   console.error(err);
   return c.json({ error: "Something went wrong" }, 500);
+});
+
+// Cross-site request forgery: sign-in is a cookie, so a hostile page could make a signed-in
+// browser send requests. Writes must come from our own origin and be JSON, which a plain HTML
+// form or no-preflight fetch from another site cannot send.
+const UNSAFE = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+app.use("/api/*", async (c, next) => {
+  if (UNSAFE.has(c.req.method)) {
+    const origin = c.req.header("Origin");
+    if (origin && origin !== new URL(c.req.url).origin) return c.json({ error: "Cross-site request blocked" }, 403);
+    if (!(c.req.header("Content-Type") ?? "").toLowerCase().startsWith("application/json")) {
+      return c.json({ error: "Expected application/json" }, 415);
+    }
+  }
+  await next();
 });
 
 const body = (c: Ctx) => jsonBody(c.req);
@@ -96,6 +111,10 @@ async function identify(c: Ctx, next: Next) {
     c.set("userId", user.id);
     c.set("account", true);
     c.set("email", email);
+  } else if (accessEnforced(c.env)) {
+    // Fail closed: behind Access, a request without a valid Access identity never reaches user data,
+    // even if it somehow got past Access (e.g. the policy was switched off by mistake).
+    return c.json({ error: "Sign in required", signIn: true }, 401);
   } else if (device) {
     await db.prepare("INSERT OR IGNORE INTO users (id) VALUES (?)").bind(device).run();
     c.set("userId", device);
@@ -275,15 +294,48 @@ app.delete("/api/feedback/:id", async (c) => {
 
 app.all("/api/*", (c) => c.json({ error: "not found" }, 404));
 
+/**
+ * Headers on every response. The CSP allows exactly what the app loads: its own files, the
+ * OpenFreeMap basemap (style, tiles, fonts, sprites), Google Fonts, and blob: workers (MapLibre).
+ */
+export const SECURITY_HEADERS: Record<string, string> = {
+  "Content-Security-Policy": [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: blob: https://tiles.openfreemap.org",
+    "connect-src 'self' https://tiles.openfreemap.org",
+    "worker-src 'self' blob:",
+    "child-src 'self' blob:",
+    "manifest-src 'self'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "object-src 'none'",
+  ].join("; "),
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy": "geolocation=(self), camera=(), microphone=(), payment=(), usb=()",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+};
+
+function secured(res: Response): Response {
+  const out = new Response(res.body, res);
+  for (const [k, v] of Object.entries(SECURITY_HEADERS)) out.headers.set(k, v);
+  return out;
+}
+
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(req.url);
-    if (url.pathname.startsWith("/api/") || !env.ASSETS) return app.fetch(req, env, ctx);
+    if (url.pathname.startsWith("/api/") || !env.ASSETS) return secured(await app.fetch(req, env, ctx));
     const res = await env.ASSETS.fetch(req);
     // Map tiles outside Singapore don't exist: answer "empty tile" instead of the app's index.html.
     if (url.pathname.startsWith("/data/") && (res.headers.get("Content-Type") ?? "").includes("text/html")) {
-      return new Response(null, { status: 204 });
+      return secured(new Response(null, { status: 204 }));
     }
-    return res;
+    return secured(res);
   },
 } satisfies ExportedHandler<Env>;

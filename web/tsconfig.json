@@ -9,7 +9,7 @@
     "jsxImportSource": "preact",
     "allowImportingTsExtensions": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
-    "types": ["vite/client"],
+    "types": ["vite/client", "geojson"],
     "skipLibCheck": true
   },
   "include": ["src"]

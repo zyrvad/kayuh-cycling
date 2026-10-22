@@ -1,5 +1,6 @@
 import type { LonLat, Poi, RouteResult } from "@kayuh/router";
-import maplibregl, { type GeoJSONSource, type LngLatBoundsLike } from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
+import type { GeoJSONSource, LngLatBoundsLike } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { TIER_COLORS, TIER_LABELS } from "./util.ts";
 
