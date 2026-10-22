@@ -10,23 +10,49 @@
 - Verified live: the dev-only `X-Dev-Email` header is ignored, and forged Access tokens are
   rejected.
 
-## Switching on sign-in (Cloudflare Access): Jaden's steps
+## Automatic deploys from GitHub (Workers Builds)
 
-1. Cloudflare dashboard → **Zero Trust**. The first time, pick a team name (e.g. `zyrvad`, which
-   gives `zyrvad.cloudflareaccess.com`) and the **Free** plan (up to 50 users; Cloudflare may ask
-   for a card even though it's free).
-2. **Workers & Pages → kayuh → Settings → Domains & Routes → workers.dev → Enable Cloudflare
-   Access**. This creates an Access application for `kayuh.zyrvad.workers.dev`.
-3. Zero Trust → **Access → Applications → kayuh → Policies**:
-   - Edit the policy: **Allow**, Include → **Emails** → your email and your friends' emails.
-   - Session duration: **1 month**, so the home-screen app doesn't keep asking.
+One-time setup, in the Cloudflare dashboard:
+
+1. **Workers & Pages → kayuh → Settings → Build → Connect**, and authorise the Cloudflare GitHub app
+   for `zyrvad/kayuh-cycling`.
+2. Settings:
+   - Branch: `main`
+   - Root directory: blank (repo root)
+   - Build command: `npm ci && npm run build -w web`
+   - Deploy command: `cd worker && npx wrangler deploy`
+   - API token: leave blank and Cloudflare makes one
+3. Save, then push a commit (or retry the build) and watch it under **Deployments**.
+
+Not covered by builds:
+- D1 schema changes. Run `npx wrangler d1 migrations apply DB --remote` in `worker/` by hand
+  before pushing code that needs them.
+- The data pipeline, which runs on the Mac and commits its output.
+
+## Switching on sign-in (Cloudflare Access)
+
+1. Dashboard → **Zero Trust**. The first time, pick a team name (e.g. `zyrvad`, which gives
+   `zyrvad.cloudflareaccess.com`) and the **Free** plan (up to 50 users; it may ask for a card
+   even though it's free).
+2. **Workers & Pages → kayuh → Access tab → Protect this Worker behind Access → All traffic.**
+   ("Previews only" would leave the live site open. Avoid the account-wide "Protect all Workers"
+   card, which would also lock Dispatch.)
+3. Under **Authentication policy**, create the policy, then **Apply Access**. It can also be edited
+   later in Zero Trust → Access → Applications → kayuh.
+   - **Allow**, Include → **Emails**: your email and your friends'.
+   - Session duration: **1 month**.
    - Login method: **One-time PIN**, which is on by default.
-4. From the application's **Overview**, copy the **Application Audience (AUD) tag**. Send it to
-   Claude with your team domain. Neither is a secret. Claude puts them in `wrangler.toml` as
-   `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` and redeploys. From then on, every request carries a
-   verified email.
-5. Optional: let shared route links work for people not on the list. Add a second Access
-   application for the paths `/r/*` and `/api/share/*` with a **Bypass → Everyone** policy.
+4. Copy two values and send them to Claude:
+   - the **Application Audience (AUD) tag**, from the application → Configure → Additional settings
+   - the **team domain**, `<team>.cloudflareaccess.com`
+
+   Claude adds them to `wrangler.toml` as `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` (not secrets), so
+   the Worker verifies every request's `Cf-Access-Jwt-Assertion` token.
+5. Optional: let shared route links work for anyone. Add a second Access application for the paths
+   `/r/*` and `/api/share/*` with a **Bypass → Everyone** policy.
+
+To add a friend later, add their email to the policy, then send them the link. They sign in
+with the emailed code, then go to Share → Add to Home Screen.
 
 ## Where to host: Cloudflare, not Vercel
 

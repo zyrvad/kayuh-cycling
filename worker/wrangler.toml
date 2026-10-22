@@ -19,3 +19,10 @@ migrations_dir = "migrations"
 
 # Secrets (set with `npx wrangler secret put NAME`, or in .dev.vars locally):
 #   ONEMAP_TOKEN  optional; OneMap search currently works without it
+
+# Cloudflare Access (friends-only sign-in). Not secrets: the AUD tag identifies the Access
+# application and the team domain serves its public signing keys. src/auth.ts verifies every
+# request's Cf-Access-Jwt-Assertion against these.
+[vars]
+ACCESS_TEAM_DOMAIN = "shy-dust-1ef6.cloudflareaccess.com"
+ACCESS_AUD = "923313ce29d3f36987be96ac8bf917576dd2d38bf34f89cb26a7a0236424619d"
