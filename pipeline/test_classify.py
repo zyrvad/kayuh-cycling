@@ -71,3 +71,5 @@ def test_parking_labels_are_readable():
     assert rack_kind("TEMASEK POLY_RACKS") == "Temasek Poly rack"
     assert rack_kind("MCCY_RACKS") == "MCCY rack"
     assert rack_kind("NEA_RACKS") == "NEA rack"
+    assert parking_label("Sims Avenue Block 842_Yb", "Yellow Box") == "Yellow box · Sims Avenue Block 842"
+    assert parking_label("Bus Stop 92149_R", "Yellow Box") == "Yellow box · Bus Stop 92149"

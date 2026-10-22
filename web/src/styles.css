@@ -225,3 +225,30 @@ input { font: inherit; }
 .seg-sub { font-size: 11px; font-weight: 500; color: var(--muted); white-space: nowrap; }
 .option-note { margin: -4px 0 0; font-size: 13px; color: var(--muted); line-height: 1.4; }
 .update-banner { position: absolute; left: 50%; transform: translateX(-50%); top: calc(12px + env(safe-area-inset-top, 0px)); z-index: 30; border: 0; background: var(--accent); color: #FFFFFF; padding: 10px 16px; border-radius: 999px; font-size: 14px; font-weight: 600; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2); white-space: nowrap; }
+
+.sheet-grip { align-self: stretch; height: 22px; margin: -10px -16px -8px; padding: 9px 0; border: 0; background: none; display: flex; justify-content: center; cursor: grab; touch-action: none; }
+.sheet-grip:active { cursor: grabbing; }
+.sheet-grip .handle { width: 40px; }
+.sheet.collapsed { overflow: hidden; }
+
+/* ---------- crews */
+.section-title { margin: 4px 0 0; font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: 0.05em; text-transform: uppercase; }
+.field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; }
+.field input, .field select, .field textarea { font: inherit; font-weight: 500; font-size: 16px; padding: 11px 12px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--surface); color: var(--ink); }
+.field textarea { resize: vertical; }
+.back-link { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; padding: 0; margin-bottom: -6px; }
+.invite-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.invite-code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 18px; font-weight: 700; letter-spacing: 0.12em; padding: 8px 12px; background: var(--soft); border-radius: 10px; }
+.members { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.members li { display: flex; gap: 12px; align-items: center; }
+.avatar { width: 36px; height: 36px; border-radius: 18px; background: var(--accent-soft); color: var(--accent-deep); font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.avatar.going { background: var(--accent); color: #FFFFFF; }
+.avatar.no, .avatar.none { background: var(--soft); color: var(--muted); }
+.ride-card-btn { width: 100%; border: 0; text-align: left; padding: 0; cursor: pointer; }
+.ride-card-btn:hover { box-shadow: 0 0 0 1px var(--line-2); }
+.notes { margin: 0; font-size: 14px; color: var(--ink-2); white-space: pre-wrap; }
+.compact-stats .big { font-size: 26px; }
+.btn.danger { color: var(--warn); border-color: #F2C7B3; }
+.crew-cta { height: 44px; font-size: 14px; }
+.form-body { padding: 0 16px 24px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+a.btn { text-decoration: none; color: inherit; }

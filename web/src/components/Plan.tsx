@@ -1,13 +1,13 @@
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import type { RouteResult } from "@kayuh/router";
-import { api, type NewRoute } from "../api.ts";
+import { api, type CrewSummary, type NewRoute } from "../api.ts";
 import { router } from "../routerClient.ts";
 import {
-  addStop, cap, current, loopKm, mode, movePoint, pickIndex, planError, planning, points, prefs, removePoint, results,
+  addStop, cap, current, groupCap, loopKm, me, mode, movePoint, openCrew, openGroupRide, refreshMe, pickIndex, planError, planning, points, prefs, removePoint, results,
   reverseRoute, routeName, savedRouteId, screen, selected, settings, sharedName, showToast,
 } from "../state.ts";
 import { duration, encodePolyline, km, OPERATOR_NAMES } from "../util.ts";
-import { TierBar } from "./common.tsx";
+import { Sheet, TierBar } from "./common.tsx";
 import { Back, Bookmark, Close, Grip, Plus, Share, Swap, Timer, Watch } from "./Icons.tsx";
 import { SearchSheet } from "./SearchSheet.tsx";
 
@@ -178,6 +178,7 @@ function PointRows({ onEdit }: { onEdit: (i: number) => void }) {
 
 export function Plan() {
   const [editing, setEditing] = useState<number | null>(null);
+  const [groupForm, setGroupForm] = useState(false);
   const r = current.value;
   const isLoop = mode.value === "loop";
   const capMin = cap.value;
@@ -186,7 +187,7 @@ export function Plan() {
   return (
     <>
       <div class="plan-head raised-card">
-        <button class="icon-btn soft" aria-label="Back" onClick={() => { screen.value = "discover"; pickIndex.value = null; sharedName.value = null; }}><Back /></button>
+        <button class="icon-btn soft" aria-label="Back" onClick={() => { screen.value = "discover"; pickIndex.value = null; sharedName.value = null; groupCap.value = null; }}><Back /></button>
         <PointRows onEdit={(i) => setEditing(i)} />
         {!isLoop && (
           <div class="head-actions">
@@ -205,8 +206,7 @@ export function Plan() {
         </div>
       )}
 
-      <div class={r ? "sheet plan-sheet" : "sheet plan-sheet compact"}>
-        <div class="handle" />
+      <Sheet class={r ? "sheet plan-sheet" : "sheet plan-sheet compact"} peek={r ? 300 : 96}>
         {sharedName.value && <div class="banner info">Shared route: {sharedName.value}</div>}
         {planning.value && !r && <div class="muted center pad">Finding the nicest paths…</div>}
         {planError.value && <div class="banner warn">{planError.value}</div>}
@@ -238,11 +238,14 @@ export function Plan() {
                 <Timer />
                 {r.legs.length === 1
                   ? `One ${op} ride, under your ${capMin} free minutes`
-                  : `${r.legs.length} legs, each meant to fit your ${capMin}-min free ${op} ride`}
+                  : groupCap.value
+                    ? `${r.legs.length} legs, each within the group's shortest free ride (${capMin} min)`
+                    : `${r.legs.length} legs, each meant to fit your ${capMin}-min free ${op} ride`}
               </div>
             )}
             {r.warnings.map((w) => <div key={w} class="banner warn">{w}</div>)}
 
+            <button class="btn outline crew-cta" onClick={() => setGroupForm(true)}>Ride this with your crew</button>
             <ol class="legs" aria-label="Legs">
               <li class="leg start-leg">
                 <div class="leg-rail"><span class="leg-dot start" /><span class="rail" /></div>
@@ -270,7 +273,7 @@ export function Plan() {
             </ol>
           </>
         )}
-      </div>
+      </Sheet>
 
       {r && (
         <div class="action-bar">
@@ -284,10 +287,87 @@ export function Plan() {
         </div>
       )}
 
+      {groupForm && r && <GroupRideForm route={r} onClose={() => setGroupForm(false)} />}
       {editing !== null && (
         <SearchSheet index={editing} title={editing === 0 ? "Start" : editing === points.value.length - 1 ? "Destination" : "Stop"}
           onClose={() => setEditing(null)} />
       )}
     </>
   );
+}
+
+/** Next Saturday, 7:30 am local time, as a datetime-local value. */
+function nextSaturdayMorning(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7));
+  d.setHours(7, 30, 0, 0);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function GroupRideForm({ route, onClose }: { route: RouteResult; onClose: () => void }) {
+  const [crews, setCrews] = useState<CrewSummary[] | null>(null);
+  const [crewId, setCrewId] = useState("");
+  const [title, setTitle] = useState(routeName().slice(0, 80));
+  const [at, setAt] = useState(nextSaturdayMorning());
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const signedIn = me.value?.signedIn;
+
+  useEffect(() => {
+    if (!me.value) refreshMe();
+    api.crews().then((c) => { setCrews(c); setCrewId(c[0]?.id ?? ""); }).catch((e) => setError(e.message));
+  }, []);
+
+  const start = route.legs[0].from;
+  return (
+    <div class="sheet-full" role="dialog" aria-label="Plan a group ride">
+      <div class="search-head">
+        <strong class="lg grow" style={{ alignSelf: "center" }}>Ride this with your crew</strong>
+        <button class="icon-btn" aria-label="Close" onClick={onClose}><Close /></button>
+      </div>
+      <form class="form-body" onSubmit={async (e) => {
+        e.preventDefault();
+        try {
+          const { id } = await api.planGroupRide(crewId, {
+            title: title.trim(), startsAt: new Date(at).toISOString(), notes: notes.trim() || undefined,
+            meet: { lon: start.lon, lat: start.lat, name: start.name || "Start" },
+            route: { ...toNewRoute(route), profile: route.profile },
+          });
+          showToast("Group ride planned");
+          onClose();
+          openGroupRide(id);
+        } catch (err) { setError((err as Error).message); }
+      }}>
+        {error && <div class="banner warn">{error}</div>}
+        {signedIn === false && <div class="banner info">Sign in first: open the Crew tab.</div>}
+        {crews?.length === 0 && (
+          <div class="banner info">You're not in a crew yet. <button type="button" class="link-btn" onClick={() => { onClose(); openCrewList(); }}>Start one</button></div>
+        )}
+        {!!crews?.length && (
+          <label class="field"><span>Crew</span>
+            <select value={crewId} onChange={(e) => setCrewId((e.target as HTMLSelectElement).value)}>
+              {crews.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+        )}
+        <label class="field"><span>Title</span>
+          <input required maxLength={80} value={title} onInput={(e) => setTitle((e.target as HTMLInputElement).value)} />
+        </label>
+        <label class="field"><span>When</span>
+          <input type="datetime-local" required value={at} onInput={(e) => setAt((e.target as HTMLInputElement).value)} />
+        </label>
+        <label class="field"><span>Notes (optional)</span>
+          <textarea rows={3} maxLength={500} value={notes} onInput={(e) => setNotes((e.target as HTMLTextAreaElement).value)}
+            placeholder="Breakfast at Changi Village after?" />
+        </label>
+        <p class="muted small">Meeting point: {start.name || "the route's start"}. Everyone's free-ride limit is checked, and the route is split for the shortest one.</p>
+        <button class="btn primary" disabled={!crewId}>Plan group ride</button>
+      </form>
+    </div>
+  );
+}
+
+function openCrewList() {
+  screen.value = "crew";
 }

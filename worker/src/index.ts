@@ -1,18 +1,20 @@
 import { Hono, type Context, type Next } from "hono";
+import { requestEmail, type AuthEnv } from "./auth.ts";
 import { getConditions } from "./conditions.ts";
+import { registerCrews } from "./crews.ts";
 import { searchPlaces } from "./search.ts";
 import {
-  BadRequest, feedbackBody, inSingapore, meBody, rideBody, routeBody, visibilityBody,
+  BadRequest, feedbackBody, inSingapore, jsonBody, meBody, rideBody, routeBody, visibilityBody,
 } from "./validate.ts";
 
-export interface Env {
+export interface Env extends AuthEnv {
   DB: D1Database;
   ASSETS?: Fetcher;
   ONEMAP_TOKEN?: string;
 }
 
-type App = { Bindings: Env; Variables: { userId: string } };
-type Ctx = Context<App>;
+export type App = { Bindings: Env; Variables: { userId: string; account: boolean; email: string | null } };
+export type Ctx = Context<App>;
 
 const DEVICE_HEADER = "X-Kayuh-Device";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -25,15 +27,9 @@ app.onError((err, c) => {
   return c.json({ error: "Something went wrong" }, 500);
 });
 
-async function body(c: Ctx): Promise<unknown> {
-  try {
-    return await c.req.json();
-  } catch {
-    throw new BadRequest("expected a JSON body");
-  }
-}
+const body = (c: Ctx) => jsonBody(c.req);
 
-function shareToken(): string {
+export function shareToken(): string {
   const alphabet = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const bytes = crypto.getRandomValues(new Uint8Array(10));
   return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
@@ -72,32 +68,81 @@ app.get("/api/share/:token", async (c) => {
   return c.json({ route: routeOut(row) });
 });
 
-// ------------------------------------------------------------------ per device
+// ------------------------------------------------------------------ identity
 
-async function device(c: Ctx, next: Next) {
-  const id = c.req.header(DEVICE_HEADER) ?? "";
-  if (!UUID.test(id)) return c.json({ error: `missing or invalid ${DEVICE_HEADER}` }, 401);
-  await c.env.DB.prepare("INSERT OR IGNORE INTO users (id) VALUES (?)").bind(id.toLowerCase()).run();
-  c.set("userId", id.toLowerCase());
+/**
+ * Signed-in people (Cloudflare Access) get an account keyed by email. Anyone else is a device:
+ * the app sends a random id it keeps in local storage. When a device signs in, whatever it saved
+ * before moves to the account.
+ */
+async function identify(c: Ctx, next: Next) {
+  const db = c.env.DB;
+  const email = await requestEmail(c.req.raw, c.env);
+  const raw = c.req.header(DEVICE_HEADER) ?? "";
+  const device = UUID.test(raw) ? raw.toLowerCase() : null;
+  if (email) {
+    let user = await db.prepare("SELECT id FROM users WHERE email = ? AND kind = 'account'").bind(email).first<{ id: string }>();
+    if (!user) {
+      const id = crypto.randomUUID();
+      // Start from the device's settings, if it had any.
+      await db.prepare(
+        `INSERT INTO users (id, kind, email, display_name, operator, cap_minutes, speed_kmh)
+         SELECT ?, 'account', ?, ?, COALESCE(d.operator, 'helloride'), COALESCE(d.cap_minutes, 30), COALESCE(d.speed_kmh, 13)
+           FROM (SELECT 1) LEFT JOIN users d ON d.id = ? AND d.kind = 'device'`,
+      ).bind(id, email, email.split("@")[0], device).run();
+      user = { id };
+    }
+    if (device) await mergeDevice(db, device, user.id);
+    c.set("userId", user.id);
+    c.set("account", true);
+    c.set("email", email);
+  } else if (device) {
+    await db.prepare("INSERT OR IGNORE INTO users (id) VALUES (?)").bind(device).run();
+    c.set("userId", device);
+    c.set("account", false);
+    c.set("email", null);
+  } else {
+    return c.json({ error: `missing or invalid ${DEVICE_HEADER}` }, 401);
+  }
   await next();
 }
 
-for (const path of ["/api/me", "/api/routes", "/api/routes/*", "/api/rides", "/api/rides/*", "/api/feedback", "/api/feedback/*"]) {
-  app.use(path, device);
+async function mergeDevice(db: D1Database, device: string, account: string) {
+  const d = await db.prepare("SELECT id FROM users WHERE id = ? AND kind = 'device'").bind(device).first();
+  if (!d) return;
+  await db.batch([
+    db.prepare("UPDATE routes SET user_id = ? WHERE user_id = ?").bind(account, device),
+    db.prepare("UPDATE rides SET user_id = ? WHERE user_id = ?").bind(account, device),
+    db.prepare("UPDATE segment_feedback SET user_id = ? WHERE user_id = ?").bind(account, device),
+    db.prepare("DELETE FROM users WHERE id = ?").bind(device),
+  ]);
+}
+
+for (const path of [
+  "/api/me", "/api/routes", "/api/routes/*", "/api/rides", "/api/rides/*", "/api/feedback", "/api/feedback/*",
+  "/api/crews", "/api/crews/*", "/api/group-rides", "/api/group-rides/*",
+]) {
+  app.use(path, identify);
 }
 
 app.get("/api/me", async (c) => {
-  const u = await c.env.DB.prepare("SELECT operator, cap_minutes, speed_kmh, kind FROM users WHERE id = ?")
-    .bind(c.var.userId).first<{ operator: string; cap_minutes: number; speed_kmh: number; kind: string }>();
-  return c.json({ operator: u!.operator, capMinutes: u!.cap_minutes, speedKmh: u!.speed_kmh, signedIn: u!.kind === "account" });
+  const u = await c.env.DB.prepare("SELECT operator, cap_minutes, speed_kmh, display_name FROM users WHERE id = ?")
+    .bind(c.var.userId).first<{ operator: string; cap_minutes: number; speed_kmh: number; display_name: string | null }>();
+  return c.json({
+    id: c.var.account ? c.var.userId : null, email: c.var.email, displayName: u!.display_name,
+    operator: u!.operator, capMinutes: u!.cap_minutes, speedKmh: u!.speed_kmh, signedIn: c.var.account,
+  });
 });
 
 app.put("/api/me", async (c) => {
   const b = meBody(await body(c));
-  await c.env.DB.prepare("UPDATE users SET operator = ?, cap_minutes = ?, speed_kmh = ? WHERE id = ?")
-    .bind(b.operator, b.capMinutes, b.speedKmh, c.var.userId).run();
+  await c.env.DB.prepare(
+    "UPDATE users SET operator = ?, cap_minutes = ?, speed_kmh = ?, display_name = COALESCE(?, display_name) WHERE id = ?",
+  ).bind(b.operator, b.capMinutes, b.speedKmh, b.displayName, c.var.userId).run();
   return c.json(b);
 });
+
+registerCrews(app);
 
 function routeOut(r: Record<string, string | number>) {
   return {

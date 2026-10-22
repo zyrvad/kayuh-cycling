@@ -4,12 +4,14 @@ import { api } from "./api.ts";
 import { Discover } from "./components/Discover.tsx";
 import { Plan } from "./components/Plan.tsx";
 import { Ride } from "./components/Ride.tsx";
-import { CrewTab, MeTab, openSaved, RidesTab, RoutesTab } from "./components/Tabs.tsx";
+import { CrewTab } from "./components/Crew.tsx";
+import { MeTab, openSaved, RidesTab, RoutesTab } from "./components/Tabs.tsx";
 import { MapView } from "./map.ts";
 import { updateAvailable, watchForUpdates } from "./update.ts";
 import { router, routerReady } from "./routerClient.ts";
 import {
-  current, mode, myLocation, pickIndex, points, refreshPace, results, routerInfo, screen, selected, setPoint, sharedName, showToast, toast,
+  current, mode, myLocation, openCrew, openGroupRide, pickIndex, points, refreshMe, refreshPace, results, routerInfo, screen, selected,
+  setPoint, sharedName, showToast, toast,
 } from "./state.ts";
 
 export function App() {
@@ -20,6 +22,7 @@ export function App() {
     const m = new MapView(mapEl.current!);
     setMap(m);
     watchForUpdates();
+    refreshMe();
     // ?debug exposes internals for poking at from the browser console.
     if (new URLSearchParams(location.search).has("debug")) Object.assign(window, { kayuh: { map: m, router, current } });
     refreshPace();
@@ -60,6 +63,19 @@ export function App() {
         if (r && screen.value === "plan") m.fitRoute(r, { top: 170, bottom: Math.round(window.innerHeight * 0.55), left: 40, right: 40 });
       }),
     ];
+
+    // Crew invite (/join/<code>) and group ride (/ride/<id>) links.
+    const join = location.pathname.match(/^\/join\/([A-Za-z0-9]+)$/);
+    if (join) {
+      history.replaceState(null, "", "/");
+      api.joinCrew(join[1]).then((j) => { showToast(`You joined ${j.name}`); openCrew(j.crewId); })
+        .catch((e) => { showToast(e.status === 401 ? "Sign in first, then open the invite link again" : e.message); screen.value = "crew"; });
+    }
+    const rideLink = location.pathname.match(/^\/ride\/([0-9a-f-]{36})$/);
+    if (rideLink) {
+      history.replaceState(null, "", "/");
+      openGroupRide(rideLink[1]);
+    }
 
     // Opened from a share link: /r/<token>
     const shared = location.pathname.match(/^\/r\/([A-Za-z0-9]+)$/);

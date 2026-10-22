@@ -2,6 +2,15 @@
 
 export class BadRequest extends Error {}
 
+/** The request's JSON body, or a 400 if it isn't JSON. */
+export async function jsonBody(req: { json(): Promise<unknown> }): Promise<unknown> {
+  try {
+    return await req.json();
+  } catch {
+    throw new BadRequest("expected a JSON body");
+  }
+}
+
 const MODES = ["ab", "loop", "explore", "freeform"] as const;
 const PROFILES = ["nicest", "balanced", "direct"] as const;
 const OPERATORS = ["helloride", "anywheel", "own"] as const;
@@ -129,5 +138,39 @@ export function meBody(v: unknown) {
     operator: oneOf(o, "operator", OPERATORS),
     capMinutes: num(o, "capMinutes", 10, 240),
     speedKmh: num(o, "speedKmh", 5, 30),
+    displayName: str(o, "displayName", 40, true) || null,
+  };
+}
+
+export function crewNameBody(v: unknown) {
+  return str(obj(v), "name", 40);
+}
+
+export function joinBody(v: unknown) {
+  const code = str(obj(v), "code", 20).toUpperCase();
+  if (!/^[A-Z0-9]{6,20}$/.test(code)) throw new BadRequest("code: expected an invite code");
+  return code;
+}
+
+export function rsvpBody(v: unknown) {
+  return oneOf(obj(v), "status", ["going", "maybe", "no"] as const);
+}
+
+export function groupRideBody(v: unknown) {
+  const o = obj(v);
+  const startsAt = str(o, "startsAt", 40);
+  if (Number.isNaN(Date.parse(startsAt))) throw new BadRequest("startsAt: expected an ISO date and time");
+  const meet = obj(o.meet);
+  const route = routeBody({ ...obj(o.route), mode: "ab", profile: obj(o.route).profile ?? "nicest" });
+  return {
+    title: str(o, "title", 80),
+    startsAt,
+    notes: str(o, "notes", 500, true) || null,
+    meet: {
+      lon: num(meet, "lon", BBOX.minLon, BBOX.maxLon),
+      lat: num(meet, "lat", BBOX.minLat, BBOX.maxLat),
+      name: str(meet, "name", 120),
+    },
+    route,
   };
 }

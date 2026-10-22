@@ -1,4 +1,5 @@
 import type { ComponentChildren } from "preact";
+import { useState } from "preact/hooks";
 import { screen, type Screen } from "../state.ts";
 import { TIER_COLORS, TIER_SHORT } from "../util.ts";
 import { TabCrew, TabMap, TabMe, TabRides, TabRoutes } from "./Icons.tsx";
@@ -49,5 +50,51 @@ export function Page({ title, children }: { title: string; children: ComponentCh
       <h1>{title}</h1>
       {children}
     </section>
+  );
+}
+
+/**
+ * A bottom sheet you can collapse by dragging its handle down (or tapping it), leaving `peek`
+ * pixels visible, and expand again by dragging up or tapping.
+ */
+export function Sheet({ class: cls, peek, children }: { class: string; peek: number; children: ComponentChildren }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [dy, setDy] = useState<number | null>(null);
+
+  const onDown = (e: PointerEvent) => {
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    const startY = e.clientY;
+    let last = 0;
+    const move = (ev: PointerEvent) => {
+      last = ev.clientY - startY;
+      setDy(last);
+    };
+    const up = () => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      el.removeEventListener("pointercancel", up);
+      setDy(null);
+      if (Math.abs(last) < 6) setCollapsed((c) => !c); // a tap toggles
+      else if (last > 50) setCollapsed(true);
+      else if (last < -50) setCollapsed(false);
+    };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+  };
+
+  const drag = dy ?? 0;
+  const transform = collapsed
+    ? `translateY(calc(100% - ${peek}px + ${Math.min(0, drag)}px))`
+    : `translateY(${Math.max(0, drag)}px)`;
+  return (
+    <div class={`${cls}${collapsed ? " collapsed" : ""}`} style={{ transform, transition: dy === null ? "transform 220ms ease" : "none" }}>
+      <button class="sheet-grip" aria-label={collapsed ? "Expand panel" : "Collapse panel"} aria-expanded={!collapsed}
+        onPointerDown={onDown} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setCollapsed(!collapsed); } }}>
+        <span class="handle" />
+      </button>
+      {children}
+    </div>
   );
 }

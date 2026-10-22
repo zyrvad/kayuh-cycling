@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { api, type Ride, type SavedRoute } from "../api.ts";
 import {
-  loopKm, mode, pace, points, routerInfo, savedRouteId, screen, settings, showToast, updateSettings, type Settings,
+  loopKm, me, mode, pace, points, refreshMe, routerInfo, savedRouteId, screen, settings, showToast, updateSettings, type Settings,
 } from "../state.ts";
 import { duration, km, OPERATOR_NAMES } from "../util.ts";
 import { Page, TabBar, TierBar } from "./common.tsx";
@@ -98,21 +98,6 @@ export function RidesTab() {
   );
 }
 
-export function CrewTab() {
-  return (
-    <>
-      <Page title="Crew">
-        <div class="empty-state">
-          <strong class="lg">Crews and group rides are coming</strong>
-          <p class="muted">Soon you'll invite friends with a link, plan a ride together with a meeting point that has legal parking, and see whose free ride runs out first.</p>
-          <p class="muted">For now, plan a route and tap <strong>Share</strong>: anyone can open the link, no account needed.</p>
-        </div>
-      </Page>
-      <TabBar />
-    </>
-  );
-}
-
 function Slider({ label, k, min, max, step, format }: { label: string; k: keyof Settings; min: number; max: number; step: number; format: (v: number) => string }) {
   const v = settings.value[k] as number;
   return (
@@ -165,7 +150,7 @@ export function MeTab() {
         </section>
         <section class="group">
           <h2>Account</h2>
-          <p class="muted small">Your routes and rides are saved to this device's Kayuh ID. Sign-in to sync across devices is coming with crews.</p>
+          <Account />
         </section>
         <section class="group">
           <h2>Data</h2>
@@ -177,5 +162,32 @@ export function MeTab() {
       </Page>
       <TabBar />
     </>
+  );
+}
+
+function Account() {
+  const m = me.value;
+  const [name, setName] = useState(m?.displayName ?? "");
+  useEffect(() => { if (!m) refreshMe(); }, []);
+  useEffect(() => setName(m?.displayName ?? ""), [m?.displayName]);
+  if (!m?.signedIn) {
+    return <p class="muted small">Not signed in: your routes and rides are saved to this device. Signing in keeps them on every device and lets you join crews.</p>;
+  }
+  const s = settings.value;
+  return (
+    <form class="stack-8" onSubmit={async (e) => {
+      e.preventDefault();
+      await api.saveMe({ operator: s.operator, capMinutes: s.capMinutes, speedKmh: s.speedKmh, displayName: name.trim() })
+        .then(refreshMe).then(() => showToast("Saved")).catch((err) => showToast(err.message));
+    }}>
+      <p class="muted small">Signed in as <strong>{m.email}</strong>. Your routes and rides follow you to any device.</p>
+      <label class="field"><span>Name your crews see</span>
+        <input required maxLength={40} value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} />
+      </label>
+      <div class="row gap-10">
+        <button class="btn primary grow">Save name</button>
+        <a class="btn outline grow" href="/cdn-cgi/access/logout">Sign out</a>
+      </div>
+    </form>
   );
 }

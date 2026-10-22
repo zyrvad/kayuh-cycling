@@ -219,7 +219,11 @@ def parking_label(desc: str, rack_type: str) -> str:
         return f"{kind} · S{m.group(1)}"
     if not desc:
         return kind
-    pretty = re.sub(r"\s+\d+$", "", desc).title().replace("Mrt", "MRT").replace("Lrt", "LRT").replace("Hdb", "HDB").replace(" Cc", " CC")
+    # Drop internal suffixes like "_R" or "_Yb" and trailing rack numbers.
+    desc = re.sub(r"_[A-Za-z]{1,3}$", "", desc)
+    # Trailing 1-2 digit numbers are rack indices ("MARINE TERRACE MRT 1"); longer ones are
+    # block numbers and bus stop codes, which are worth keeping.
+    pretty = re.sub(r"\s+\d{1,2}$", "", desc).title().replace("Mrt", "MRT").replace("Lrt", "LRT").replace("Hdb", "HDB").replace(" Cc", " CC")
     return pretty if kind.lower() in pretty.lower() or kind in ("Bike rack", "MRT rack") else f"{kind} · {pretty}"
 
 
@@ -509,7 +513,7 @@ def main():
     if shutil.which("tippecanoe"):
         shutil.rmtree(tiles, ignore_errors=True)
         subprocess.run(["tippecanoe", "-e", str(tiles), "--force", "-l", "network", "--no-tile-compression",
-                        "-Z", "10", "-z", "15", "--drop-densest-as-needed", "--no-tile-size-limit",
+                        "-Z", "9", "-z", "15", "--drop-densest-as-needed", "--no-tile-size-limit",
                         "-q", str(BUILD / "network.geojson")], check=True)
         n = sum(1 for _ in tiles.rglob("*.pbf"))
         size = sum(p.stat().st_size for p in tiles.rglob("*.pbf"))

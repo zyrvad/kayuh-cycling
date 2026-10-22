@@ -44,7 +44,7 @@ export function updateSettings(patch: Partial<Settings>) {
   settings.value = { ...settings.value, ...patch };
   const s = settings.value;
   if ("operator" in patch || "capMinutes" in patch || "speedKmh" in patch) {
-    api.saveMe({ operator: s.operator, capMinutes: s.capMinutes, speedKmh: s.speedKmh }).catch(() => {});
+    api.saveMe({ operator: s.operator, capMinutes: s.capMinutes, speedKmh: s.speedKmh }).then(refreshMe).catch(() => {});
   }
 }
 
@@ -74,8 +74,38 @@ export const prefs = computed<Prefs>(() => ({
   paceFactor: settings.value.learnPace && pace.value ? pace.value.factor : 1,
 }));
 
-/** The per-ride limit, or null for your own bike. */
-export const cap = computed(() => (settings.value.operator === "own" ? null : settings.value.capMinutes));
+/** A group ride's strictest free-ride limit, while you're looking at its route. */
+export const groupCap = signal<number | null>(null);
+
+/** The per-ride limit, or null for your own bike. Group rides use the strictest limit in the group. */
+export const cap = computed(() => {
+  const mine = settings.value.operator === "own" ? null : settings.value.capMinutes;
+  const group = groupCap.value;
+  if (group === null) return mine;
+  return mine === null ? group : Math.min(mine, group);
+});
+
+// ------------------------------------------------------------------ account & crews
+
+export const me = signal<Me | null>(null);
+
+export function refreshMe() {
+  return api.me().then((m) => (me.value = m)).catch(() => (me.value = null));
+}
+
+/** What the Crew tab is showing. */
+export type CrewView = { kind: "list" } | { kind: "crew"; id: string } | { kind: "ride"; id: string };
+export const crewView = signal<CrewView>({ kind: "list" });
+
+export function openCrew(id: string) {
+  crewView.value = { kind: "crew", id };
+  screen.value = "crew";
+}
+
+export function openGroupRide(id: string) {
+  crewView.value = { kind: "ride", id };
+  screen.value = "crew";
+}
 
 // ------------------------------------------------------------------ navigation
 

@@ -4,7 +4,6 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { TIER_COLORS, TIER_LABELS } from "./util.ts";
 
 const STYLE = "https://tiles.openfreemap.org/styles/positron";
-const SG_CENTER: LonLat = [103.86, 1.355];
 const FONT = ["Noto Sans Bold"];
 const INK = "#1D2A23";
 /** Parking is clustered ("12 P" bubbles) until this zoom, then drawn spot by spot. */
@@ -57,10 +56,12 @@ export class MapView {
     this.map = new maplibregl.Map({
       container,
       style: STYLE,
-      center: SG_CENTER,
-      zoom: 11,
-      minZoom: 9.5,
-      maxBounds: [[103.4, 1.05], [104.3, 1.6]],
+      // Start with the whole island visible above the search bar and the bottom sheet.
+      bounds: [[103.6, 1.2], [104.05, 1.47]],
+      fitBoundsOptions: { padding: { top: 140, bottom: Math.round(container.clientHeight * 0.45), left: 12, right: 12 } },
+      minZoom: 9,
+      // Extra room to the south so the island can be panned up above the bottom sheet.
+      maxBounds: [[103.3, 0.75], [104.4, 1.65]],
       attributionControl: { compact: true, customAttribution: "Paths: OpenStreetMap, NParks, LTA, URA via data.gov.sg" },
       dragRotate: false,
       pitchWithRotate: false,
@@ -94,10 +95,10 @@ export class MapView {
     const m = this.map;
     const before = this.firstSymbolLayer();
     m.addSource("network", {
-      type: "vector", tiles: [`${location.origin}/data/tiles/{z}/{x}/{y}.pbf`], minzoom: 10, maxzoom: 15,
+      type: "vector", tiles: [`${location.origin}/data/tiles/{z}/{x}/{y}.pbf`], minzoom: 9, maxzoom: 15,
       bounds: [103.6, 1.18, 104.05, 1.48],
     });
-    const width = (w: number): maplibregl.ExpressionSpecification => ["interpolate", ["linear"], ["zoom"], 10, w * 0.35, 13, w, 17, w * 2.4];
+    const width = (w: number): maplibregl.ExpressionSpecification => ["interpolate", ["linear"], ["zoom"], 9, w * 0.3, 13, w, 17, w * 2.4];
     const net = (id: string, t: number, color: string, w: number, extra: Partial<maplibregl.LineLayerSpecification> = {}) =>
       m.addLayer({
         id, type: "line", source: "network", "source-layer": "network", filter: ["==", ["get", "t"], t],

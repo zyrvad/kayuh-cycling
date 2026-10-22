@@ -2,11 +2,11 @@ import { useEffect, useState } from "preact/hooks";
 import type { LonLat, RouteResult } from "@kayuh/router";
 import { router, type NearbyParking } from "../routerClient.ts";
 import {
-  cap, conditions, locate, loopKm, mode, myLocation, pickIndex, points, prefs, refreshConditions, routerInfo,
+  cap, conditions, groupCap, locate, loopKm, mode, myLocation, pickIndex, points, prefs, refreshConditions, routerInfo,
   screen, settings, type Mode,
 } from "../state.ts";
 import { duration, km, OPERATOR_NAMES, sunset, TIER_COLORS, timeOfDay } from "../util.ts";
-import { TabBar, TierBar } from "./common.tsx";
+import { Sheet, TabBar, TierBar } from "./common.tsx";
 import { Layers, Locate, Search } from "./Icons.tsx";
 import { SearchSheet } from "./SearchSheet.tsx";
 import type { MapView } from "../map.ts";
@@ -35,6 +35,7 @@ export function Discover({ map }: { map: MapView | null }) {
   }, [here[0], here[1], routerInfo.value]);
 
   const start = (m: Mode) => {
+    groupCap.value = null;
     mode.value = m;
     const startPoint = myLocation.value ? { ll: myLocation.value, label: "My location" } : null;
     points.value = m === "loop" ? [startPoint] : [startPoint, null];
@@ -43,6 +44,7 @@ export function Discover({ map }: { map: MapView | null }) {
   };
 
   const openSearch = () => {
+    groupCap.value = null;
     mode.value = "ab";
     points.value = [myLocation.value ? { ll: myLocation.value, label: "My location" } : null, null];
     setSearching(true);
@@ -86,8 +88,7 @@ export function Discover({ map }: { map: MapView | null }) {
         </div>
       )}
 
-      <div class="sheet discover-sheet">
-        <div class="handle" />
+      <Sheet class="sheet discover-sheet" peek={96}>
         <div class="row between">
           <div class="stack-2">
             <strong class="lg">{parking.length ? `${parking.length} legal parking spot${parking.length > 1 ? "s" : ""} nearby` : "No legal parking within 400 m"}</strong>
@@ -120,7 +121,7 @@ export function Discover({ map }: { map: MapView | null }) {
             ))}
           </div>
         </div>
-      </div>
+      </Sheet>
       <TabBar />
       {searching && <SearchSheet index={1} title="Where to?" onClose={() => {
         setSearching(false);

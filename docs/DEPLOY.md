@@ -1,19 +1,32 @@
 # Deploying Kayuh
 
-## Status (21 Oct 2026)
+## Status (22 Oct 2026)
 
-- Live at **https://kayuh.zyrvad.workers.dev** (Worker + 700 static files). Planning, search and
-  weather work.
-- D1 database `kayuh` was created in APAC, but its migrations aren't applied yet: the account had
-  used its free 5M rows/day of D1 reads, all by Dispatch, so D1 is locked until 00:00 UTC
-  (08:00 SGT). Saving, sharing and ride history return errors until then. After the reset, run
-  `npx wrangler d1 migrations apply DB --remote` in `worker/`.
-- `graph.bin` now ships gzipped (`graph.bin.gz`, 5.4 MB instead of 12.6 MB), because Cloudflare
-  doesn't compress binary assets.
-- Access (friends-only login) isn't set up yet.
+- Live at **https://kayuh.zyrvad.workers.dev**, with D1 migrations 0001–0003 applied (routes,
+  rides, accounts, crews, group rides).
+- Accounts and crews are built and deployed, but nobody can sign in until Cloudflare Access is
+  switched on (below). Until then everything else works on per-device ids, and the Crew tab
+  explains that sign-in isn't on yet.
+- Verified live: the dev-only `X-Dev-Email` header is ignored, and forged Access tokens are
+  rejected.
 
-Plan of 21 Oct 2026. Goal: Jaden and a handful of friends can open Kayuh on their phones, and
-nobody else can.
+## Switching on sign-in (Cloudflare Access): Jaden's steps
+
+1. Cloudflare dashboard → **Zero Trust**. The first time, pick a team name (e.g. `zyrvad`, which
+   gives `zyrvad.cloudflareaccess.com`) and the **Free** plan (up to 50 users; Cloudflare may ask
+   for a card even though it's free).
+2. **Workers & Pages → kayuh → Settings → Domains & Routes → workers.dev → Enable Cloudflare
+   Access**. This creates an Access application for `kayuh.zyrvad.workers.dev`.
+3. Zero Trust → **Access → Applications → kayuh → Policies**:
+   - Edit the policy: **Allow**, Include → **Emails** → your email and your friends' emails.
+   - Session duration: **1 month**, so the home-screen app doesn't keep asking.
+   - Login method: **One-time PIN**, which is on by default.
+4. From the application's **Overview**, copy the **Application Audience (AUD) tag**. Send it to
+   Claude with your team domain. Neither is a secret. Claude puts them in `wrangler.toml` as
+   `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` and redeploys. From then on, every request carries a
+   verified email.
+5. Optional: let shared route links work for people not on the list. Add a second Access
+   application for the paths `/r/*` and `/api/share/*` with a **Bypass → Everyone** policy.
 
 ## Where to host: Cloudflare, not Vercel
 
