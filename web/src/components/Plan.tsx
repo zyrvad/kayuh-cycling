@@ -7,8 +7,10 @@ import {
   reverseRoute, routeName, savedRouteId, screen, selected, settings, sharedName, showToast,
 } from "../state.ts";
 import { duration, encodePolyline, km, OPERATOR_NAMES } from "../util.ts";
-import { Sheet, TierBar } from "./common.tsx";
-import { Back, Bookmark, Close, Grip, Plus, Share, Swap, Timer, Watch } from "./Icons.tsx";
+import { Compass, Sheet, TierBar } from "./common.tsx";
+import { Back, Bookmark, ChevronDown, ChevronUp, Close, Grip, Plus, Share, Swap, Timer, Watch } from "./Icons.tsx";
+import type { MapView } from "../map.ts";
+import { requestCompass } from "../heading.ts";
 import { SearchSheet } from "./SearchSheet.tsx";
 import { ShareSheet } from "./ShareSheet.tsx";
 
@@ -164,38 +166,66 @@ function PointRows({ onEdit }: { onEdit: (i: number) => void }) {
   );
 }
 
-export function Plan() {
+/** Collapsed stop list: start → N stops → end on one line. */
+function StopsSummary({ onOpen }: { onOpen: () => void }) {
+  const pts = points.value;
+  const stops = pts.length - 2;
+  return (
+    <button class="stops-summary" onClick={onOpen} aria-label="Show all stops">
+      <span class="summary-line"><span class="dot dot-start" /><span class="ellipsis">{pts[0]?.label ?? "Start"}</span></span>
+      <span class="summary-stops">{stops} stop{stops === 1 ? "" : "s"}</span>
+      <span class="summary-line"><span class="dot dot-end" /><span class="ellipsis">{pts[pts.length - 1]?.label ?? "Destination"}</span></span>
+    </button>
+  );
+}
+
+export function Plan({ map }: { map: MapView | null }) {
   const [editing, setEditing] = useState<number | null>(null);
+  const [listOpen, setListOpen] = useState(true);
   const [groupForm, setGroupForm] = useState(false);
   const [sharing, setSharing] = useState(false);
   const r = current.value;
   const isLoop = mode.value === "loop";
   const capMin = cap.value;
   const op = OPERATOR_NAMES[settings.value.operator];
+  // Two or more stops make the list tall enough to hide the map: let it fold to one line.
+  const collapsible = !isLoop && points.value.length >= 4;
+  const collapsed = collapsible && !listOpen && pickIndex.value === null;
 
   return (
     <>
-      <div class="plan-head raised-card">
-        <button class="icon-btn soft" aria-label="Back" onClick={() => { screen.value = "discover"; pickIndex.value = null; sharedName.value = null; groupCap.value = null; }}><Back /></button>
-        <PointRows onEdit={(i) => setEditing(i)} />
-        {!isLoop && (
-          <div class="head-actions">
-            <button class="icon-btn soft" aria-label="Add a stop" onClick={addStop}><Plus /></button>
-            <button class="icon-btn soft" aria-label="Reverse route" onClick={reverseRoute}><Swap /></button>
+      <div class="plan-top">
+        <div class="plan-head raised-card">
+          <button class="icon-btn soft" aria-label="Back" onClick={() => { screen.value = "discover"; pickIndex.value = null; sharedName.value = null; groupCap.value = null; }}><Back /></button>
+          {collapsed
+            ? <StopsSummary onOpen={() => setListOpen(true)} />
+            : <PointRows onEdit={(i) => setEditing(i)} />}
+          {!isLoop && (
+            <div class="head-actions">
+              {!collapsed && <button class="icon-btn soft" aria-label="Add a stop" onClick={() => { addStop(); setListOpen(true); }}><Plus /></button>}
+              {!collapsed && <button class="icon-btn soft" aria-label="Reverse route" onClick={reverseRoute}><Swap /></button>}
+              {collapsible && (
+                <button class="icon-btn soft" aria-label={collapsed ? "Show all stops" : "Hide the stop list"} aria-expanded={!collapsed}
+                  onClick={() => setListOpen(collapsed)}>
+                  {collapsed ? <ChevronDown /> : <ChevronUp />}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {pickIndex.value !== null && (
+          <div class="pick-banner" role="status">
+            {pickIndex.value >= points.value.length
+              ? "Tap the map to extend the route"
+              : `Tap the map to set the ${pickIndex.value === 0 ? "start" : pickIndex.value === points.value.length - 1 ? "destination" : "stop"}`}
+            <button class="link-btn" onClick={() => (pickIndex.value = null)}>{pickIndex.value >= points.value.length ? "Done" : "Cancel"}</button>
           </div>
         )}
+        <Compass onClick={() => map?.rotateTo(0)} class="align-end" />
       </div>
 
-      {pickIndex.value !== null && (
-        <div class="pick-banner" role="status">
-          {pickIndex.value >= points.value.length
-            ? "Tap the map to extend the route"
-            : `Tap the map to set the ${pickIndex.value === 0 ? "start" : pickIndex.value === points.value.length - 1 ? "destination" : "stop"}`}
-          <button class="link-btn" onClick={() => (pickIndex.value = null)}>{pickIndex.value >= points.value.length ? "Done" : "Cancel"}</button>
-        </div>
-      )}
-
-      <Sheet class={r ? "sheet plan-sheet" : "sheet plan-sheet compact"} peek={r ? 300 : 96}>
+      <Sheet class={r ? "sheet plan-sheet" : "sheet plan-sheet compact"} peek={r ? 200 : 96}>
         {sharedName.value && <div class="banner info">Shared route: {sharedName.value}</div>}
         {planning.value && !r && <div class="muted center pad">Finding the nicest paths…</div>}
         {planError.value && <div class="banner warn">{planError.value}</div>}
@@ -272,7 +302,7 @@ export function Plan() {
           </button>
           <button class="icon-btn outline" aria-label="Share route" onClick={() => setSharing(true)}><Share /></button>
           <button class="btn outline grow nowrap" onClick={() => sendToWatch(r)}><Watch /> To watch</button>
-          <button class="btn primary grow" onClick={() => (screen.value = "ride")}>Start ride</button>
+          <button class="btn primary grow" onClick={() => { requestCompass(); screen.value = "ride"; }}>Start ride</button>
         </div>
       )}
 

@@ -120,8 +120,11 @@ input { font: inherit; }
 .tab.active { color: var(--accent); font-weight: 700; }
 
 /* ---------- plan */
-.plan-head { position: absolute; left: 16px; right: 16px; top: calc(16px + env(safe-area-inset-top, 0px)); padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start; z-index: 3; }
-.point-rows { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+/* Stop list, map-tap hint and compass stack down from the top, so nothing overlaps however many stops there are. */
+.plan-top { position: absolute; left: 16px; right: 16px; top: calc(16px + env(safe-area-inset-top, 0px)); display: flex; flex-direction: column; gap: 10px; z-index: 3; pointer-events: none; }
+.plan-top > * { pointer-events: auto; }
+.plan-head { padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start; }
+.point-rows { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; max-height: min(40vh, 320px); overflow-y: auto; overscroll-behavior: contain; }
 .point-row { display: flex; align-items: center; gap: 8px; min-height: 36px; }
 .point-label { flex: 1; text-align: left; border: 0; background: none; font-size: 15px; font-weight: 600; padding: 6px 4px; border-radius: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .point-label:hover { background: var(--soft); }
@@ -133,7 +136,7 @@ input { font: inherit; }
 .head-actions { display: flex; flex-direction: column; gap: 6px; }
 .loop-slider { display: flex; flex-direction: column; gap: 4px; font-size: 14px; padding: 4px 4px 2px; }
 .loop-slider input, .setting input { width: 100%; accent-color: var(--accent); }
-.pick-banner { position: absolute; left: 16px; right: 16px; top: calc(150px + env(safe-area-inset-top, 0px)); z-index: 3; background: var(--ink); color: #FFFFFF; border-radius: 12px; padding: 10px 12px; font-size: 14px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+.pick-banner { background: var(--ink); color: #FFFFFF; border-radius: 12px; padding: 10px 12px; font-size: 14px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
 .pick-banner .link-btn { color: var(--accent-light); }
 .plan-sheet { top: 46%; bottom: 0; overflow-y: auto; padding-bottom: calc(96px + var(--safe-bottom)); }
 .plan-sheet.compact { top: auto; padding-bottom: calc(24px + var(--safe-bottom)); }
@@ -266,10 +269,10 @@ a.btn { text-decoration: none; color: inherit; }
 
 /* Wider screens (landscape, tablets, foldables): the map fills the screen, the panels stay phone-width. */
 @media (min-width: 600px) {
-  .sheet, .tabbar, .action-bar, .top-stack, .plan-head, .pick-banner, .ride-instruction, .ride-card, .ride-actions, .bailout {
+  .sheet, .tabbar, .action-bar, .top-stack, .plan-top, .ride-instruction, .ride-card, .ride-actions, .bailout {
     max-width: 560px; margin-inline: auto;
   }
-  .top-stack, .plan-head, .pick-banner, .ride-instruction, .ride-card, .ride-actions, .bailout { max-width: 528px; }
+  .top-stack, .plan-top, .ride-instruction, .ride-card, .ride-actions, .bailout { max-width: 528px; }
   .page { padding-inline: max(16px, calc((100% - 528px) / 2)); }
   .sheet-full > * { width: 100%; max-width: 560px; margin-inline: auto; }
 }
@@ -284,3 +287,16 @@ a.btn { text-decoration: none; color: inherit; }
 .photo-picker .link-btn { align-self: flex-start; padding-left: 0; }
 .small-btn { height: 40px; font-size: 14px; position: relative; }
 .btn.disabled { opacity: 0.6; pointer-events: none; }
+
+/* Collapsed stop list */
+.stops-summary { flex: 1; min-width: 0; border: 0; background: none; padding: 4px 0; display: flex; flex-direction: column; align-items: stretch; gap: 2px; text-align: left; font-weight: 600; }
+.summary-line { display: flex; align-items: center; gap: 8px; min-height: 30px; min-width: 0; }
+.summary-stops { margin-left: 18px; font-size: 12px; font-weight: 700; color: var(--muted); border-left: 2px dotted var(--line-2); padding: 2px 0 2px 10px; }
+.ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Compass */
+.icon-btn.compass { border-radius: 22px; }
+.icon-btn.compass svg { transition: transform 200ms linear; }
+.icon-btn.compass[aria-pressed="true"] { background: var(--accent-soft); }
+.align-end { align-self: flex-end; }
+.ride-compass { position: absolute; right: 16px; top: calc(208px + env(safe-area-inset-top, 0px)); z-index: 3; width: 48px; height: 48px; }

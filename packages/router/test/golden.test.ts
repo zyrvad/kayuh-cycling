@@ -94,3 +94,11 @@ check("Mediacorp → East Coast Park → NUS High", [[103.7876, 1.2967], [103.91
 check("Mediacorp → NUS High → East Coast Park", [[103.7876, 1.2967], [103.7718, 1.3069], [103.9135, 1.3016]], (r) => {
   assert.ok(r.distanceM > 20000);
 });
+
+// The route passes back by the Bukit Panjang rack it stops at, just before a stretch with no parking.
+// The planner used to "stop" there again and again (38 empty legs), then dump the rest into one 74-min leg.
+check("Bukit Batok → Springleaf: no stops stacked on one rack", [[103.759073, 1.351318], [103.818525, 1.397303]], (r) => {
+  assert.ok(r.legs.length <= 6, `${r.legs.length} legs`);
+  for (const leg of r.legs) assert.ok(leg.distanceM > 300, `empty leg at ${leg.to.name}`);
+  for (let i = 1; i < r.legs.length; i++) assert.notEqual(r.legs[i].to.name, r.legs[i - 1].to.name, "two legs end at the same parking");
+});

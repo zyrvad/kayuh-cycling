@@ -53,9 +53,15 @@ export class MapView {
   readonly map: maplibregl.Map;
   private loaded: Promise<void>;
   private markers: maplibregl.Marker[] = [];
+  /** Map gestures in progress (pan, twist, pinch). */
+  private gestures = 0;
   /** Return true when the tap was used (e.g. to place a point), so the map does nothing else with it. */
   onTap: (ll: LonLat) => boolean | void = () => {};
   onDragPoint: (index: number, ll: LonLat) => void = () => {};
+  /** The map's bearing (degrees clockwise from north) whenever it changes. */
+  onBearing: (deg: number) => void = () => {};
+  /** The rider twisted the map themselves (not an animation of ours). */
+  onUserRotate: () => void = () => {};
 
   constructor(container: HTMLElement) {
     this.map = new maplibregl.Map({
@@ -68,10 +74,17 @@ export class MapView {
       // Extra room to the south so the island can be panned up above the bottom sheet.
       maxBounds: [[103.3, 0.75], [104.4, 1.65]],
       attributionControl: { compact: true, customAttribution: "Paths: OpenStreetMap, NParks, LTA, URA via data.gov.sg" },
-      dragRotate: false,
+      // Two-finger twist (or right-drag on a computer) rotates. Tilt stays off: a flat map reads better on a bike.
       pitchWithRotate: false,
     });
-    this.map.touchZoomRotate.disableRotation();
+    this.map.touchPitch.disable();
+    this.map.on("rotate", () => this.onBearing(this.map.getBearing()));
+    this.map.on("rotatestart", (e) => { if ((e as { originalEvent?: Event }).originalEvent) this.onUserRotate(); });
+    // While a finger is on the map, following the rider must not yank it away mid-gesture.
+    for (const [start, end] of [["dragstart", "dragend"], ["rotatestart", "rotateend"], ["zoomstart", "zoomend"]] as const) {
+      this.map.on(start, (e) => { if ((e as { originalEvent?: Event }).originalEvent) this.gestures++; });
+      this.map.on(end, (e) => { if ((e as { originalEvent?: Event }).originalEvent) this.gestures = Math.max(0, this.gestures - 1); });
+    }
     this.loaded = new Promise((resolve) => this.map.on("load", () => {
       this.addLayers();
       // Keep the attribution as a small (i) button instead of a banner over the map.
@@ -307,8 +320,14 @@ export class MapView {
     this.map.fitBounds(b as LngLatBoundsLike, { padding, duration: 600, maxZoom: 16 });
   }
 
+  /** Keep the rider centred. Without a bearing the map keeps whatever rotation it has. */
   follow(ll: LonLat, bearing?: number) {
-    this.map.easeTo({ center: ll, zoom: Math.max(this.map.getZoom(), 16), bearing: bearing ?? 0, duration: 800 });
+    if (this.gestures > 0) return;
+    this.map.easeTo({ center: ll, zoom: Math.max(this.map.getZoom(), 16), bearing: bearing ?? this.map.getBearing(), duration: 800 });
+  }
+
+  rotateTo(bearing: number, duration = 300) {
+    this.map.rotateTo(bearing, { duration });
   }
 
   flyTo(ll: LonLat, zoom = 15) {

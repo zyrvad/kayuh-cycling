@@ -6,7 +6,7 @@ import {
   screen, settings, type Mode,
 } from "../state.ts";
 import { duration, km, OPERATOR_NAMES, sunset, TIER_COLORS, timeOfDay } from "../util.ts";
-import { Avatar, Sheet, TabBar, TierBar } from "./common.tsx";
+import { Avatar, Compass, Sheet, TabBar, TierBar } from "./common.tsx";
 import { Layers, Locate, Search } from "./Icons.tsx";
 import { SearchSheet } from "./SearchSheet.tsx";
 import type { MapView } from "../map.ts";
@@ -73,6 +73,7 @@ export function Discover({ map }: { map: MapView | null }) {
       </div>
 
       <div class="map-buttons">
+        <Compass onClick={() => map?.rotateTo(0)} />
         <button class="icon-btn raised" aria-label="Show or hide the legend" aria-pressed={legend} onClick={() => setLegend(!legend)}><Layers /></button>
         <button class="icon-btn raised locate" aria-label="Show my location" onClick={async () => {
           const ll = await locate();

@@ -23,6 +23,15 @@ export const Speaker = ({ size = 22, ...r }: P) => <svg {...base(size, r)}><path
 export const Muted = ({ size = 22, ...r }: P) => <svg {...base(size, r)}><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M17 9l4 6M21 9l-4 6" /></svg>;
 export const Trash = ({ size = 18, ...r }: P) => <svg {...base(size, r)}><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>;
 export const Grip = ({ size = 18, ...r }: P) => <svg {...base(size, r)}><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="3" /></svg>;
+export const ChevronDown = ({ size = 18, ...r }: P) => <svg {...base(size, r)}><path d="M6 9l6 6 6-6" /></svg>;
+export const ChevronUp = ({ size = 18, ...r }: P) => <svg {...base(size, r)}><path d="M6 15l6-6 6 6" /></svg>;
+/** A compass needle: red end points north. Rotate the whole icon by -bearing. */
+export const Needle = ({ size = 26, ...r }: P) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" {...r}>
+    <path d="M12 2.5l3.6 9.5H8.4z" fill="#D9541E" />
+    <path d="M12 21.5l-3.6-9.5h7.2z" fill="#9AA39E" />
+  </svg>
+);
 export const Pin = ({ size = 18, ...r }: P) => <svg {...base(size, r)}><path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z" /><circle cx="12" cy="10" r="2.5" /></svg>;
 
 export function Turn({ type, size = 52 }: { type: string; size?: number }) {

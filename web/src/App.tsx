@@ -10,7 +10,7 @@ import { MapView } from "./map.ts";
 import { updateAvailable, watchForUpdates } from "./update.ts";
 import { router, routerReady } from "./routerClient.ts";
 import {
-  current, mode, myLocation, openCrew, openGroupRide, pickIndex, points, refreshMe, refreshPace, results, routerInfo, screen, selected,
+  current, mapBearing, mode, myLocation, openCrew, openGroupRide, pickIndex, points, refreshMe, refreshPace, results, rideView, routerInfo, screen, selected,
   setPoint, sharedName, showToast, toast,
 } from "./state.ts";
 
@@ -38,6 +38,9 @@ export function App() {
       if (pickIndex.value === null && mode.value === "freeform") pickIndex.value = points.value.length;
       return true;
     };
+    m.onBearing = (b) => (mapBearing.value = b);
+    // Twisting the map by hand during a ride means "leave it like this".
+    m.onUserRotate = () => { if (screen.value === "ride") rideView.value = "free"; };
     m.onDragPoint = (i, ll) => setPoint(i, { ll, label: points.value[i]?.label === "My location" ? "Near my location" : points.value[i]?.label ?? "Dropped pin" });
 
     // Map follows app state.
@@ -60,7 +63,10 @@ export function App() {
       }),
       effect(() => {
         const r = current.value;
-        if (r && screen.value === "plan") m.fitRoute(r, { top: 170, bottom: Math.round(window.innerHeight * 0.55), left: 40, right: 40 });
+        if (!r || screen.value !== "plan") return;
+        // Keep the route clear of the stop list, however long it is.
+        const head = document.querySelector(".plan-top")?.getBoundingClientRect().bottom ?? 170;
+        m.fitRoute(r, { top: Math.round(head) + 24, bottom: Math.round(window.innerHeight * 0.55), left: 40, right: 40 });
       }),
     ];
 
@@ -94,7 +100,7 @@ export function App() {
     <div class={`app screen-${s}`}>
       <div ref={mapEl} class="map" />
       {s === "discover" && <Discover map={map} />}
-      {s === "plan" && <Plan />}
+      {s === "plan" && <Plan map={map} />}
       {s === "ride" && current.value && <Ride map={map} />}
       {s === "routes" && <RoutesTab />}
       {s === "rides" && <RidesTab />}

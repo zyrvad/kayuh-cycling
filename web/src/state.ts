@@ -153,6 +153,10 @@ export const sharedName = signal<string | null>(null);
 export const savedRouteId = signal<string | null>(null);
 
 export const myLocation = signal<LonLat | null>(null);
+/** The map's rotation, degrees clockwise from north. */
+export const mapBearing = signal(0);
+/** Ride mode map rotation: face the way you're going, north up, or left wherever you twisted it. */
+export const rideView = signal<"heading" | "north" | "free">("heading");
 export const conditions = signal<Conditions | null>(null);
 export const routerInfo = signal<{ nodes: number; built: string } | null>(null);
 

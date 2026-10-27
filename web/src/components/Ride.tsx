@@ -3,11 +3,22 @@ import { haversine, type Instruction, type LonLat, type Poi, type RouteResult } 
 import { api } from "../api.ts";
 import type { MapView } from "../map.ts";
 import { router } from "../routerClient.ts";
-import { cap, current, mode, points, prefs, refreshPace, routeName, savedRouteId, screen, settings, showToast } from "../state.ts";
+import { angleDiff, bearing, blendAngle, requestCompass, watchCompass } from "../heading.ts";
+import { cap, current, mode, points, prefs, refreshPace, rideView, routeName, savedRouteId, screen, settings, showToast } from "../state.ts";
 import { clock, encodePolyline, km, OPERATOR_NAMES, timeOfDay } from "../util.ts";
+import { Compass } from "./common.tsx";
 import { Muted, Speaker, Train, Turn } from "./Icons.tsx";
 
 const OFF_ROUTE_M = 40;
+/** Below this the bike is "stopped": GPS course is noise, so the compass (which way you face) takes over. */
+const MOVING_KMH = 5;
+
+/** Which way the route goes from coords[idx]: towards the point about 25 m further on. */
+function routeBearing(r: RouteResult, idx: number): number {
+  let j = idx + 1;
+  while (j < r.coords.length - 1 && r.cumM[j] - r.cumM[idx] < 25) j++;
+  return bearing(r.coords[Math.min(idx, r.coords.length - 2)], r.coords[Math.min(j, r.coords.length - 1)]);
+}
 /** ?sim=8 plays the ride back at 8x speed: handy on a desk with no GPS. */
 const SIM = Number(new URLSearchParams(location.search).get("sim") || 0);
 
@@ -46,6 +57,11 @@ export function Ride({ map }: { map: MapView | null }) {
   const idxRef = useRef(0);
   const offCount = useRef(0);
   const startedAt = useRef(new Date());
+  // Heading-up: the smoothed direction the map faces, plus the latest compass reading.
+  const heading = useRef<number | null>(null);
+  const compass = useRef<number | null>(null);
+  const moving = useRef(false);
+  const lastTurn = useRef(0);
 
   // Keep the screen on while riding.
   useEffect(() => {
@@ -53,10 +69,33 @@ export function Ride({ map }: { map: MapView | null }) {
     (navigator as any).wakeLock?.request("screen").then((l: typeof lock) => (lock = l)).catch(() => {});
     const t = setInterval(() => setNow(Date.now()), 1000);
     map?.setPadding({ top: 140, bottom: 330, left: 0, right: 0 });
-    return () => { lock?.release().catch(() => {}); clearInterval(t); map?.setPadding({ top: 0, bottom: 0, left: 0, right: 0 }); map?.setDone([]); };
+    rideView.value = "heading";
+    return () => {
+      lock?.release().catch(() => {}); clearInterval(t);
+      map?.setPadding({ top: 0, bottom: 0, left: 0, right: 0 }); map?.setDone([]); map?.rotateTo(0, 600);
+    };
   }, []);
 
-  const onPosition = (ll: LonLat, kmh: number | null) => {
+  // While stopped, turn the map with the phone (which way you're facing). Moving, GPS does it in onPosition.
+  useEffect(() => watchCompass((deg) => {
+    compass.current = deg;
+    if (moving.current || rideView.value !== "heading" || !map) return;
+    heading.current = heading.current === null ? deg : blendAngle(heading.current, deg, 0.3);
+    const t = Date.now();
+    if (t - lastTurn.current > 250 && Math.abs(angleDiff(map.map.getBearing(), heading.current)) > 4) {
+      lastTurn.current = t;
+      map.rotateTo(heading.current, 250);
+    }
+  }), [map]);
+
+  /** Where the map should face for this fix: the route ahead, your GPS course, or your compass. */
+  const faceTowards = (onRoute: boolean, kmh: number | null, course: number | null): number | null => {
+    moving.current = kmh === null ? onRoute : kmh >= MOVING_KMH;
+    if (moving.current) return onRoute ? routeBearing(route, idxRef.current) : course ?? routeBearing(route, idxRef.current);
+    return compass.current ?? heading.current ?? routeBearing(route, idxRef.current);
+  };
+
+  const onPosition = (ll: LonLat, kmh: number | null, course: number | null = null) => {
     // Search a window ahead of the last match so loops and out-and-backs don't jump around.
     let best = idxRef.current, bestD = Infinity;
     const end = Math.min(route.coords.length - 1, idxRef.current + 400);
@@ -71,7 +110,11 @@ export function Ride({ map }: { map: MapView | null }) {
     if (kmh !== null) setSpeed(kmh);
     map?.setMe(ll);
     map?.setDone(route.coords.slice(0, idxRef.current + 1));
-    map?.follow(ll);
+    const target = faceTowards(offCount.current === 0, kmh, course);
+    if (target !== null) heading.current = heading.current === null ? target : blendAngle(heading.current, target, 0.6);
+    const view = rideView.value;
+    // Free: keep whatever rotation the rider twisted the map to.
+    map?.follow(ll, view === "north" ? 0 : view === "heading" && heading.current !== null ? heading.current : undefined);
   };
 
   useEffect(() => {
@@ -86,7 +129,11 @@ export function Ride({ map }: { map: MapView | null }) {
     }
     if (!("geolocation" in navigator)) return;
     const id = navigator.geolocation.watchPosition(
-      (p) => onPosition([p.coords.longitude, p.coords.latitude], p.coords.speed != null ? p.coords.speed * 3.6 : null),
+      (p) => onPosition(
+        [p.coords.longitude, p.coords.latitude],
+        p.coords.speed != null ? p.coords.speed * 3.6 : null,
+        p.coords.heading != null && !Number.isNaN(p.coords.heading) ? p.coords.heading : null,
+      ),
       () => showToast("Location unavailable: allow location access for ride mode"),
       { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 },
     );
@@ -175,6 +222,14 @@ export function Ride({ map }: { map: MapView | null }) {
         </div>
       </div>
 
+      <Compass always class="ride-compass" pressed={rideView.value === "heading"}
+        label={rideView.value === "heading" ? "Map turns with you: tap for north up" : "Tap to turn the map with you"}
+        onClick={() => {
+          requestCompass();
+          rideView.value = rideView.value === "heading" ? "north" : "heading";
+          const b = rideView.value === "north" ? 0 : heading.current;
+          if (b !== null) map?.rotateTo(b, 400);
+        }} />
       <button class="icon-btn raised ride-mute" aria-label={muted ? "Unmute voice" : "Mute voice"} onClick={() => setMuted(!muted)}>
         {muted ? <Muted /> : <Speaker />}
       </button>

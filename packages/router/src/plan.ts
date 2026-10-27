@@ -211,10 +211,12 @@ function parkingAlong(ctx: PlanContext, steps: Step[], times: number[], budgetS:
 
 /** How many candidate stops to actually route to before settling for an over-limit leg. */
 const MAX_STOP_TRIES = 6;
+/** A safety net only: every leg must make progress, so real routes end long before this. */
+const MAX_LEGS = 250;
 
 /** The first parking after the budget runs out: the least-bad place to end an over-limit leg. */
-function firstParkingAfter(ctx: PlanContext, steps: Step[], times: number[], budgetS: number, prefs: Prefs): ParkCandidate | null {
-  const later = parkingCandidates(ctx, steps, times, budgetS, Infinity, prefs);
+function firstParkingAfter(ctx: PlanContext, steps: Step[], times: number[], budgetS: number, prefs: Prefs, here: number): ParkCandidate | null {
+  const later = parkingCandidates(ctx, steps, times, budgetS, Infinity, prefs).filter((c) => c.poi.node !== here);
   return later.sort((a, b) => a.timeS - b.timeS)[0] ?? null;
 }
 
@@ -255,15 +257,18 @@ export function planRoute(ctx: PlanContext, req: PlanRequest, profile: ProfileNa
     const times = timeline(g, steps, prefs);
     const total = times.length ? times[times.length - 1] : 0;
     // The last leg may use most of the safety margin: an extra stop to save one minute isn't worth it.
-    if (total <= cap - 60 || guard >= 40) {
+    if (total <= cap - 60 || guard >= MAX_LEGS) {
       legSteps.push({ steps, from: cur.stop, to: end.stop, overCap: total > cap });
       if (total > cap) warnings.push(`The last leg runs over your free ${req.capMinutes} min.`);
       break;
     }
     // Candidates are judged on the through-route; the real leg to a stop can differ a little
     // (a detour into a car park, extra turns), so check the actual leg before accepting it.
+    // Never "stop" where we already are: a route that passes back by the current parking would
+    // otherwise stack zero-length legs there until the guard ran out, leaving one huge last leg.
     const ranked = [...parkingAlong(ctx, steps, times, budget, prefs), ...parkingAlong(ctx, steps, times, cap, prefs)]
-      .filter((c, i, arr) => c.poi.node !== end.node && arr.findIndex((o) => o.poi.id === c.poi.id) === i);
+      .filter((c, i, arr) => c.poi.node !== end.node && c.poi.node !== cur.node && arr.findIndex((o) => o.poi.id === c.poi.id) === i);
+    const minLegS = Math.min(MIN_LEG_S, budget * 0.2);
     let chosen: { pick: ParkCandidate; leg: Step[]; legTime: number; reached: number } | null = null;
     const tryStop = (pick: ParkCandidate) => {
       // Vias reached before the stop are part of this leg.
@@ -273,10 +278,11 @@ export function planRoute(ctx: PlanContext, req: PlanRequest, profile: ProfileNa
     };
     for (const pick of ranked.slice(0, MAX_STOP_TRIES)) {
       const t = tryStop(pick);
-      if (t.legTime <= cap) { chosen = t; break; }
+      // The real leg must also make progress (the through-route can pass a stop that is, by road, right behind us).
+      if (t.legTime <= cap && (t.legTime >= minLegS || t.reached > 0)) { chosen = t; break; }
     }
     if (!chosen) {
-      const after = firstParkingAfter(ctx, steps, times, cap, prefs);
+      const after = firstParkingAfter(ctx, steps, times, cap, prefs, cur.node);
       if (!after || after.poi.node === end.node) {
         warnings.push(`No legal parking along the rest of the route; the last leg runs over your free ${req.capMinutes} min.`);
         legSteps.push({ steps, from: cur.stop, to: end.stop, overCap: true });

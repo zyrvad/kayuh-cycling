@@ -1,9 +1,9 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { authHeaders } from "../api.ts";
-import { screen, type Screen } from "../state.ts";
+import { mapBearing, screen, type Screen } from "../state.ts";
 import { TIER_COLORS, TIER_SHORT } from "../util.ts";
-import { TabCrew, TabMap, TabMe, TabRides, TabRoutes } from "./Icons.tsx";
+import { Needle, TabCrew, TabMap, TabMe, TabRides, TabRoutes } from "./Icons.tsx";
 
 export function TierBar({ tierM, height = 10, labels = false }: { tierM: number[]; height?: number; labels?: boolean }) {
   const total = tierM.reduce((a, b) => a + b, 0) || 1;
@@ -142,4 +142,20 @@ export async function squarePhoto(file: File, size = 256): Promise<string> {
   ctx.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, size, size);
   bmp.close();
   return canvas.toDataURL("image/jpeg", 0.85);
+}
+
+/**
+ * Shows which way is north. Hidden while the map points north, unless `always` (ride mode, where it
+ * also switches heading-up on and off).
+ */
+export function Compass({ onClick, always = false, label = "Point the map north", pressed, class: cls = "" }: {
+  onClick: () => void; always?: boolean; label?: string; pressed?: boolean; class?: string;
+}) {
+  const b = mapBearing.value;
+  if (!always && Math.abs(((b + 540) % 360) - 180) < 1) return null;
+  return (
+    <button class={`icon-btn raised compass ${cls}`} aria-label={label} aria-pressed={pressed} onClick={onClick}>
+      <Needle style={{ transform: `rotate(${-b}deg)` }} />
+    </button>
+  );
 }
