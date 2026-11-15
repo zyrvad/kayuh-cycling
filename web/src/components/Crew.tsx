@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { api, devEmail, type CrewDetail, type CrewRide, type CrewRoute, type CrewSummary, type GroupRideDetail, type GroupRideSummary, type RsvpStatus } from "../api.ts";
 import {
-  crewView, groupCap, me, mode, openCrew, openGroupRide, points, refreshMe, savedRouteId, screen, sharedName, showToast,
+  crewView, groupCap, me, mode, openCrew, openGroupRide, openRide, points, refreshMe, savedRouteId, screen, sharedName, showToast,
 } from "../state.ts";
 import { duration, km, OPERATOR_NAMES } from "../util.ts";
 import { Avatar, Page, TabBar, TierBar } from "./common.tsx";
@@ -239,11 +239,11 @@ function CrewPage({ id }: { id: string }) {
             <ul class="list">
               {shared.map((r) => (
                 <li key={r.id} class="list-card">
-                  <div class="list-main">
+                  <button class="list-main" onClick={() => openRide(r.id, !r.mine)}>
                     <strong>{r.name}</strong>
-                    <span class="muted">{r.rider} · {new Date(r.riddenAt).toLocaleDateString("en-SG", { day: "numeric", month: "short" })} · {km(r.distanceM)} km</span>
+                    <span class="muted">{r.mine ? "You" : r.rider} · {new Date(r.riddenAt).toLocaleDateString("en-SG", { day: "numeric", month: "short" })} · {km(r.distanceM)} km</span>
                     <TierBar tierM={r.tierM} height={6} />
-                  </div>
+                  </button>
                 </li>
               ))}
             </ul>

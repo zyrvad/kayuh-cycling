@@ -116,7 +116,53 @@ export function rideBody(v: unknown) {
     predictedS: o.predictedS === undefined || o.predictedS === null ? null : num(o, "predictedS", 0, 100_000),
     // Rides are private unless the rider explicitly shares them.
     visibility: o.visibility === undefined ? "private" : oneOf(o, "visibility", VISIBILITY),
+    track: o.track === undefined || o.track === null ? null : track(o.track),
+    stats: o.stats === undefined || o.stats === null ? null : rideStats(o.stats),
   };
+}
+
+const MAX_SAMPLES = 30_000; // ~8 hours at one fix a second
+const ints = (v: unknown, k: string, max: number, nullable = false) => {
+  if (!Array.isArray(v) || v.length > max || !v.every((x) => (nullable && x === null) || (Number.isInteger(x) && Math.abs(x as number) < 1e7))) {
+    throw new BadRequest(`track.${k}: expected up to ${max} integers`);
+  }
+  return v as (number | null)[];
+};
+
+/** The GPS track of a recorded ride (see web/src/track.ts). Stored as given, after checking its shape and size. */
+function track(v: unknown): string {
+  const o = obj(v);
+  if (o.v !== 1) throw new BadRequest("track.v: expected 1");
+  if (typeof o.p !== "string" || o.p.length > MAX_POLYLINE * 2) throw new BadRequest("track.p: expected an encoded polyline");
+  const out: Obj = { v: 1, p: o.p, t: ints(o.t, "t", MAX_SAMPLES) };
+  if (o.a !== undefined) out.a = ints(o.a, "a", MAX_SAMPLES, true);
+  if (o.s !== undefined) out.s = ints(o.s, "s", MAX_SAMPLES, true);
+  if (o.k !== undefined) {
+    if (typeof o.k !== "string" || o.k.length > MAX_SAMPLES || !/^[0-5-]*$/.test(o.k)) throw new BadRequest("track.k: expected path types");
+    out.k = o.k;
+  }
+  if (o.L !== undefined) out.L = ints(o.L, "L", 400);
+  return JSON.stringify(out);
+}
+
+const STAT_KEYS = ["movingS", "elapsedS", "distanceM", "avgKmh", "maxKmh", "elevGainM", "stops", "stoppedS"] as const;
+const BEST_KEYS = ["400", "1000", "5000", "10000", "20000", "40000"];
+
+/** The ride summary: a handful of numbers plus best efforts (metres → seconds). */
+function rideStats(v: unknown): string {
+  const o = obj(v);
+  const out: Obj = {};
+  for (const k of STAT_KEYS) {
+    if (o[k] === undefined || o[k] === null) continue;
+    out[k] = num(o, k, 0, 1_000_000);
+  }
+  if (o.bests !== undefined) {
+    const b = obj(o.bests);
+    const bests: Obj = {};
+    for (const k of BEST_KEYS) if (b[k] !== undefined) bests[k] = num(b, k, 1, 100_000);
+    out.bests = bests;
+  }
+  return JSON.stringify(out);
 }
 
 export function visibilityBody(v: unknown) {

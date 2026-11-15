@@ -1,5 +1,6 @@
 /** Client for the Kayuh Worker API (worker/src/index.ts). */
 import type { LonLat, Prefs } from "@kayuh/router";
+import type { RideStats, TrackJson } from "./track.ts";
 
 const DEVICE_KEY = "kayuh.device";
 
@@ -67,7 +68,11 @@ export interface Ride {
   tierM: number[]; polyline: string; source: "planned" | "recorded" | "gpx"; visibility: "private" | "crew";
   /** Kayuh's base-model estimate for the part actually ridden, for pace learning. */
   predictedS: number | null;
+  /** Summary of a recorded ride (null for older or planned-only rides). */
+  stats: RideStats | null;
+  hasTrack: boolean;
 }
+export interface RideDetail extends Ride { track: TrackJson | null }
 export interface Me {
   id: string | null; email: string | null; displayName: string | null;
   operator: "helloride" | "anywheel" | "own"; capMinutes: number; speedKmh: number; signedIn: boolean;
@@ -83,7 +88,10 @@ export interface GroupRideSummary {
 }
 export type RsvpStatus = "going" | "maybe" | "no";
 export interface CrewDetail { id: string; name: string; role: "owner" | "member"; inviteCode: string; members: CrewMember[]; rides: GroupRideSummary[] }
-export interface CrewRide { id: string; name: string; riddenAt: string; distanceM: number; timeS: number; tierM: number[]; polyline: string; rider: string; mine: boolean }
+export interface CrewRide {
+  id: string; name: string; riddenAt: string; distanceM: number; timeS: number; tierM: number[]; polyline: string; rider: string; mine: boolean;
+  stats?: RideStats | null; avatar?: string | null;
+}
 export interface CrewRoute {
   id: string; name: string; mode: SavedRoute["mode"]; profile: SavedRoute["profile"]; points: LonLat[]; prefs: Prefs;
   distanceM: number; timeS: number; tierM: number[]; legs: number; polyline: string;
@@ -137,7 +145,11 @@ export const api = {
   shareRoute: (id: string) => req<{ token: string }>("POST", `/api/routes/${id}/share`),
   shared: (token: string) => req<{ route: SavedRoute }>("GET", `/api/share/${token}`).then((r) => r.route),
   rides: () => req<{ rides: Ride[] }>("GET", "/api/rides").then((r) => r.rides),
-  logRide: (r: Omit<Ride, "id" | "visibility" | "routeId" | "predictedS"> & { routeId?: string | null; predictedS?: number | null }) => req<{ id: string }>("POST", "/api/rides", r),
+  ride: (id: string) => req<{ ride: RideDetail }>("GET", `/api/rides/${id}`).then((r) => r.ride),
+  crewFeed: () => req<{ rides: CrewRide[] }>("GET", "/api/crew-rides").then((r) => r.rides),
+  logRide: (r: Omit<Ride, "id" | "visibility" | "routeId" | "predictedS" | "stats" | "hasTrack"> & {
+    routeId?: string | null; predictedS?: number | null; track?: TrackJson | null; stats?: RideStats | null;
+  }) => req<{ id: string }>("POST", "/api/rides", r),
   setRideVisibility: (id: string, visibility: Ride["visibility"]) => req("PATCH", `/api/rides/${id}`, { visibility }),
   deleteRide: (id: string) => req("DELETE", `/api/rides/${id}`),
 };

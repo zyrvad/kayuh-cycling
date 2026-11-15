@@ -102,3 +102,12 @@ check("Bukit Batok → Springleaf: no stops stacked on one rack", [[103.759073, 
   for (const leg of r.legs) assert.ok(leg.distanceM > 300, `empty leg at ${leg.to.name}`);
   for (let i = 1; i < r.legs.length; i++) assert.notEqual(r.legs[i].to.name, r.legs[i - 1].to.name, "two legs end at the same parking");
 });
+
+test("re-routing mid-ride starts where you are and fits the rest of the current leg", () => {
+  // East Coast Park → Changi Village, 22 minutes into a 30-minute free ride.
+  const r = planRoute(ctx, { points: [[103.9135, 1.3016], [103.9876, 1.3893]], capMinutes: 30, onBike: { usedS: 22 * 60 } }, "nicest");
+  assert.equal(r.legs[0].from.name, "Here");
+  assert.equal(r.legs[0].from.parking, undefined, "no walk to parking: you're already riding");
+  assert.ok(r.legs[0].timeS <= 8 * 60, `first leg ${Math.round(r.legs[0].timeS / 60)} min, only 8 left`);
+  assert.ok(r.legs.length >= 2);
+});

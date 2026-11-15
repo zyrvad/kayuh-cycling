@@ -47,6 +47,11 @@ export interface PlanRequest {
   capMinutes?: number | null;
   /** Start and end at legal bike parking (default true). */
   snapToParking?: boolean;
+  /**
+   * Re-routing mid-ride: you're already on a bike at the first point, so the route starts right
+   * there (not at parking), and the first leg only gets the free minutes you have left.
+   */
+  onBike?: { usedS: number };
 }
 
 export interface Stop {
@@ -233,11 +238,13 @@ export function planRoute(ctx: PlanContext, req: PlanRequest, profile: ProfileNa
 
   const first = req.points[0];
   const last = req.points[req.points.length - 1];
-  const start = (snap && parkingStop(ctx, first, "start")) || pointStop(ctx, first, "start");
+  const onBike = req.onBike;
+  const start = (snap && !onBike && parkingStop(ctx, first, "start")) || pointStop(ctx, first, "start");
+  if (onBike) start.stop.name = "Here";
   const isLoop = haversine(first[0], first[1], last[0], last[1]) < 30;
   const end = isLoop ? { node: start.node, stop: { ...start.stop, kind: "end" as const } }
     : (snap && parkingStop(ctx, last, "end")) || pointStop(ctx, last, "end");
-  if (snap && !start.stop.parking) warnings.push(`No legal bike parking within ${PARKING_SEARCH_M} m of your start.`);
+  if (snap && !onBike && !start.stop.parking) warnings.push(`No legal bike parking within ${PARKING_SEARCH_M} m of your start.`);
   if (snap && !end.stop.parking) warnings.push(`No legal bike parking within ${PARKING_SEARCH_M} m of your destination: you may be fined for parking there.`);
   let vias = req.points.slice(1, -1).map((p) => pointStop(ctx, p, "via"));
 
@@ -247,11 +254,13 @@ export function planRoute(ctx: PlanContext, req: PlanRequest, profile: ProfileNa
     }
   }
 
-  const cap = req.capMinutes ? req.capMinutes * 60 : Infinity;
-  const budget = cap - LEG_SAFETY_S;
+  const fullCap = req.capMinutes ? req.capMinutes * 60 : Infinity;
   const legSteps: { steps: Step[]; from: Stop; to: Stop; overCap: boolean }[] = [];
   let cur = start;
   for (let guard = 0; ; guard++) {
+    // Mid-ride, the leg you're on has already used some of its free minutes (keep at least one to find parking).
+    const cap = guard === 0 && onBike ? Math.max(60, fullCap - onBike.usedS) : fullCap;
+    const budget = Math.max(cap / 2, cap - LEG_SAFETY_S);
     const nodes = [cur.node, ...vias.map((v) => v.node), end.node];
     const steps = routeThrough(ctx, nodes, cm);
     const times = timeline(g, steps, prefs);

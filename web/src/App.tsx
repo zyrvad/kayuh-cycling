@@ -5,12 +5,14 @@ import { Discover } from "./components/Discover.tsx";
 import { Plan } from "./components/Plan.tsx";
 import { Ride } from "./components/Ride.tsx";
 import { CrewTab } from "./components/Crew.tsx";
-import { MeTab, openSaved, RidesTab, RoutesTab } from "./components/Tabs.tsx";
+import { MeTab, openSaved, RoutesTab } from "./components/Tabs.tsx";
+import { RidesTab } from "./components/Rides.tsx";
 import { MapView } from "./map.ts";
+import { loadActiveRide } from "./activeRide.ts";
 import { updateAvailable, watchForUpdates } from "./update.ts";
 import { router, routerReady } from "./routerClient.ts";
 import {
-  current, mapBearing, mode, myLocation, openCrew, openGroupRide, pickIndex, points, refreshMe, refreshPace, results, rideView, routerInfo, screen, selected,
+  current, mapBearing, mode, rideDetail, myLocation, openCrew, openGroupRide, pickIndex, points, refreshMe, refreshPace, results, rideView, routerInfo, screen, selected,
   setPoint, sharedName, showToast, toast,
 } from "./state.ts";
 
@@ -21,6 +23,13 @@ export function App() {
   useEffect(() => {
     const m = new MapView(mapEl.current!);
     setMap(m);
+    // A ride left open (app closed, or reloaded to clear iPhone's typing history) picks up where it was.
+    const active = loadActiveRide();
+    if (active) {
+      results.value = [active.route];
+      selected.value = 0;
+      screen.value = "ride";
+    }
     watchForUpdates();
     refreshMe();
     // ?debug exposes internals for poking at from the browser console.
@@ -97,13 +106,13 @@ export function App() {
 
   const s = screen.value;
   return (
-    <div class={`app screen-${s}`}>
+    <div class={`app screen-${s}${s === "rides" && rideDetail.value ? " ride-detail" : ""}`}>
       <div ref={mapEl} class="map" />
       {s === "discover" && <Discover map={map} />}
       {s === "plan" && <Plan map={map} />}
-      {s === "ride" && current.value && <Ride map={map} />}
+      {s === "ride" && (current.value || loadActiveRide()) && <Ride map={map} />}
       {s === "routes" && <RoutesTab />}
-      {s === "rides" && <RidesTab />}
+      {s === "rides" && <RidesTab map={map} />}
       {s === "crew" && <CrewTab />}
       {s === "me" && <MeTab />}
       {toast.value && <div class="toast" role="status">{toast.value}</div>}

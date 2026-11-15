@@ -3,6 +3,8 @@ import type { LonLat, Prefs, RouteResult } from "@kayuh/router";
 import { api, type Conditions, type Me } from "./api.ts";
 import { router } from "./routerClient.ts";
 import { THEMES } from "./util.ts";
+import { needsUndoReset, saveActiveRide, type ActiveRide } from "./activeRide.ts";
+import { requestCompass } from "./heading.ts";
 
 // ------------------------------------------------------------------ settings
 
@@ -124,6 +126,13 @@ export function openGroupRide(id: string) {
 
 export type Screen = "discover" | "plan" | "ride" | "routes" | "rides" | "crew" | "me";
 export const screen = signal<Screen>("discover");
+/** The ride open on the Rides tab's detail page, if any. */
+export const rideDetail = signal<{ id: string; crew?: boolean } | null>(null);
+
+export function openRide(id: string, crew = false) {
+  rideDetail.value = { id, crew };
+  screen.value = "rides";
+}
 export const toast = signal<string | null>(null);
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 export function showToast(msg: string) {
@@ -263,4 +272,25 @@ export function refreshConditions(ll: LonLat) {
   if (key === conditionsFor) return;
   conditionsFor = key;
   api.conditions(ll).then((c) => (conditions.value = c)).catch(() => {});
+}
+
+// ------------------------------------------------------------------ riding
+
+/** Everything a ride needs to know about the plan it follows, so it doesn't depend on the plan screen. */
+export function buildActiveRide(r: RouteResult): Omit<ActiveRide, "savedAt"> {
+  const pts = points.value.filter(Boolean).map((p) => p!.ll);
+  const end = mode.value === "loop" ? pts[0] : pts[pts.length - 1];
+  const now = Date.now();
+  return {
+    route: r, name: routeName().slice(0, 80), routeId: savedRouteId.value, capMinutes: cap.value,
+    startedAt: now, legIndex: 0, legStart: now, legsDone: 0, targets: [...r.vias, end ?? r.coords[r.coords.length - 1]], track: null,
+  };
+}
+
+export function startRide(r: RouteResult) {
+  saveActiveRide(buildActiveRide(r));
+  const compass = requestCompass();
+  if (!needsUndoReset()) return void (screen.value = "ride");
+  // Clear iPhone's typing history (see activeRide.ts); the ride picks up again after the reload.
+  compass.finally(() => location.reload());
 }

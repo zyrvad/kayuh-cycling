@@ -300,3 +300,51 @@ a.btn { text-decoration: none; color: inherit; }
 .icon-btn.compass[aria-pressed="true"] { background: var(--accent-soft); }
 .align-end { align-self: flex-end; }
 .ride-compass { position: absolute; right: 16px; top: calc(208px + env(safe-area-inset-top, 0px)); z-index: 3; width: 48px; height: 48px; }
+
+/* Next group ride (map screen) */
+.next-ride { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; text-align: left; border: 0; border-radius: 14px; padding: 12px 14px; background: var(--accent-soft); color: var(--accent-ink); }
+.next-ride strong { font-size: 15px; }
+
+/* Ride cards */
+.ride-card-row { align-items: stretch; padding-right: 10px; cursor: pointer; }
+.ride-card-side { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 10px 0; }
+.minimap { border-radius: 12px; background: var(--soft); flex-shrink: 0; }
+.ride-figures { display: flex; gap: 12px; font-size: 13px; color: var(--muted); }
+.ride-figures b { color: var(--ink); font-size: 15px; }
+.gap-6 { gap: 6px; }
+.avatar.sm { width: 22px; height: 22px; border-radius: 11px; font-size: 11px; }
+
+/* Ride detail: the map shows through above the panel */
+.app.ride-detail .map { visibility: visible; }
+.detail-back { position: absolute; left: 16px; top: calc(16px + env(safe-area-inset-top, 0px)); z-index: 4; }
+.detail-colour { position: absolute; right: 16px; top: calc(16px + env(safe-area-inset-top, 0px)); z-index: 4; width: auto; box-shadow: var(--shadow); background: var(--surface); }
+.detail-colour .seg { padding: 8px 12px; }
+.detail-sheet { top: 46%; bottom: 0; overflow-y: auto; padding-bottom: calc(28px + var(--safe-bottom)); }
+.detail-title { font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
+.detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 10px; }
+.detail-grid .stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.detail-grid .stat small { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.detail-grid .stat span { font-size: 13px; color: var(--muted); }
+.detail-grid .stat b { font-size: 19px; color: var(--ink); font-weight: 800; }
+.speed-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.speed-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.speed-legend i { width: 14px; height: 5px; border-radius: 3px; display: inline-block; }
+.chart { display: flex; flex-direction: column; gap: 4px; }
+.chart-svg { width: 100%; height: 96px; touch-action: none; background: var(--soft); border-radius: 10px; }
+.chart-readout { font-size: 13px; min-height: 18px; }
+.chart-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+.effort-list, .tier-speeds { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.effort-list li, .tier-speeds li { display: grid; grid-template-columns: 70px 1fr auto auto; gap: 10px; align-items: center; padding: 8px 10px; background: var(--soft); border-radius: 10px; font-size: 14px; }
+.tier-speeds li { grid-template-columns: 22px 1fr auto auto; }
+.tier-speeds li.this-ride { background: var(--accent-soft); }
+.tier-speeds i { width: 12px; height: 12px; border-radius: 6px; display: inline-block; }
+.leg-num { width: 22px; height: 22px; border-radius: 11px; background: var(--dark); color: #FFFFFF; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; }
+.pr-badge { font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 999px; background: var(--line); color: var(--ink-2); }
+.pr-badge.gold { background: #F6D56B; color: #4A3A00; }
+.splits { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.splits th { text-align: left; font-size: 11px; color: var(--muted); font-weight: 700; padding: 4px 6px; }
+.splits td { padding: 5px 6px; border-top: 1px solid var(--line); }
+.splits .bar-col { width: 40%; }
+.split-bar { display: block; height: 8px; border-radius: 4px; }
+.detail-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.detail-actions .btn { height: 44px; font-size: 14px; }

@@ -140,6 +140,15 @@ export class MapView {
         "line-color": ["match", ["get", "tier"], 0, TIER_COLORS[0], 1, TIER_COLORS[1], 2, TIER_COLORS[2], 3, TIER_COLORS[3], 4, TIER_COLORS[4], TIER_COLORS[5]],
         "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3.5, 16, 8],
       } });
+    // A recorded ride on the ride detail page, coloured by speed or path type.
+    m.addSource("track", { type: "geojson", data: empty() });
+    m.addLayer({ id: "track-casing", type: "line", source: "track", layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": "#FFFFFF", "line-width": ["interpolate", ["linear"], ["zoom"], 10, 5, 16, 11] } });
+    m.addLayer({ id: "track", type: "line", source: "track", layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-color": ["get", "color"], "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3, 16, 7] } });
+    m.addSource("track-ends", { type: "geojson", data: empty() });
+    m.addLayer({ id: "track-ends", type: "circle", source: "track-ends",
+      paint: { "circle-radius": 7, "circle-color": ["get", "color"], "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 3 } });
     m.addSource("done", { type: "geojson", data: empty() });
     m.addLayer({ id: "done", type: "line", source: "done", layout: { "line-cap": "round", "line-join": "round" },
       paint: { "line-color": "#A7B0AA", "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3.5, 16, 8] } });
@@ -282,6 +291,31 @@ export class MapView {
       type: "FeatureCollection",
       features: (r?.lights ?? []).map((ll) => ({ type: "Feature" as const, properties: {}, geometry: { type: "Point" as const, coordinates: ll } })),
     });
+  }
+
+  /** Draw a recorded ride: runs of coordinates, each with its own colour. Null clears it. */
+  async setTrack(runs: { coords: LonLat[]; color: string }[] | null) {
+    await this.loaded;
+    const lines = (runs ?? []).filter((r) => r.coords.length > 1);
+    (this.map.getSource("track") as GeoJSONSource).setData({
+      type: "FeatureCollection",
+      features: lines.map((r) => ({ type: "Feature", properties: { color: r.color }, geometry: { type: "LineString", coordinates: r.coords } })),
+    });
+    const first = lines[0]?.coords[0], last = lines.at(-1)?.coords.at(-1);
+    (this.map.getSource("track-ends") as GeoJSONSource).setData({
+      type: "FeatureCollection",
+      features: first && last ? [
+        { type: "Feature", properties: { color: "#17804F" }, geometry: { type: "Point", coordinates: first } },
+        { type: "Feature", properties: { color: "#1D2A23" }, geometry: { type: "Point", coordinates: last } },
+      ] : [],
+    });
+  }
+
+  fitCoords(coords: LonLat[], padding: maplibregl.PaddingOptions) {
+    if (coords.length < 2) return;
+    const b = new maplibregl.LngLatBounds();
+    for (const c of coords) b.extend(c);
+    this.map.fitBounds(b as LngLatBoundsLike, { padding, duration: 0, maxZoom: 16 });
   }
 
   async setDone(coords: LonLat[]) {

@@ -220,3 +220,29 @@ test("profile pictures: only accounts upload, only crewmates see them, and they 
   assert.equal((await call("DELETE", "/api/me/avatar", { as: ALICE })).status, 200);
   assert.equal((await call("GET", "/api/me", { as: ALICE })).json.avatar, null);
 });
+
+test("recorded rides keep their GPS track and stats; lists send stats only; crewmates never get the track", async () => {
+  const crew = (await call("POST", "/api/crews", { as: ALICE, body: { name: "Kakis" } })).json;
+  await call("POST", "/api/crews/join", { as: BOB, body: { code: crew.inviteCode } });
+  const track = { v: 1, p: route.polyline, t: [0, 1, 1], a: [12, null, 13], s: [150, 162, -1], k: "00-", L: [0] };
+  const stats = { movingS: 1800, elapsedS: 2000, distanceM: 9000, avgKmh: 18, maxKmh: 31.5, bests: { "1000": 170, "5000": 990, "999": 1 } };
+  const ride = { name: "Evening ride", riddenAt: "2026-11-14T19:00:00+08:00", distanceM: 9000, timeS: 2000, tierM: route.tierM, polyline: route.polyline, source: "recorded", track, stats };
+
+  assert.equal((await call("POST", "/api/rides", { as: BOB, body: { ...ride, track: { ...track, k: "<script>" } } })).status, 400, "bad path types");
+  const { id } = (await call("POST", "/api/rides", { as: BOB, body: ride })).json;
+  const list = (await call("GET", "/api/rides", { as: BOB })).json.rides;
+  assert.equal(list[0].track, undefined, "the list leaves the track out");
+  assert.equal(list[0].hasTrack, true);
+  assert.deepEqual(list[0].stats.bests, { "1000": 170, "5000": 990 }, "unknown best-effort distances are dropped");
+  const detail = (await call("GET", `/api/rides/${id}`, { as: BOB })).json.ride;
+  assert.deepEqual(detail.track.t, [0, 1, 1]);
+  assert.equal((await call("GET", `/api/rides/${id}`, { as: ALICE })).status, 404, "only the rider sees the detail");
+
+  await call("PATCH", `/api/rides/${id}`, { as: BOB, body: { visibility: "crew" } });
+  const feed = (await call("GET", "/api/crew-rides", { as: ALICE })).json.rides;
+  assert.equal(feed.length, 1);
+  assert.equal(feed[0].rider, "bob");
+  assert.equal(feed[0].track, undefined);
+  assert.equal(feed[0].stats.maxKmh, 31.5);
+  assert.equal((await call("GET", "/api/crew-rides", { as: BOB })).json.rides.length, 0, "your own rides aren't in your crew feed");
+});

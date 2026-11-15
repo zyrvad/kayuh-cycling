@@ -63,7 +63,7 @@ function ics(r: Row, url: string): string {
 }
 
 export function registerCrews(app: Hono<App>) {
-  for (const p of ["/api/crews", "/api/crews/*", "/api/group-rides", "/api/group-rides/*"]) app.use(p, requireAccount);
+  for (const p of ["/api/crews", "/api/crews/*", "/api/group-rides", "/api/group-rides/*", "/api/crew-rides"]) app.use(p, requireAccount);
 
   // ------------------------------------------------------------------ crews
 
@@ -175,6 +175,26 @@ export function registerCrews(app: Hono<App>) {
         // Never send the first and last 200 m: that's where people's homes are.
         tierM: JSON.parse(r.tier_m as string), polyline: trimEnds(r.polyline as string),
         rider: r.display_name || String(r.email).split("@")[0], mine: r.user_id === c.var.userId,
+      })),
+    });
+  });
+
+  // Everything your crewmates shared, across all your crews (the Rides tab's Crew view).
+  app.get("/api/crew-rides", async (c) => {
+    const { results } = await c.env.DB.prepare(
+      `SELECT DISTINCT r.id, r.name, r.ridden_at, r.distance_m, r.time_s, r.tier_m, r.polyline, r.stats, u.display_name, u.email, u.id AS user_id,
+              ${AVATAR_AT("u")}
+         FROM crew_members mine JOIN crew_members theirs ON theirs.crew_id = mine.crew_id
+         JOIN rides r ON r.user_id = theirs.user_id AND r.visibility = 'crew'
+         JOIN users u ON u.id = r.user_id
+        WHERE mine.user_id = ? AND r.user_id != ? ORDER BY r.ridden_at DESC LIMIT 100`,
+    ).bind(c.var.userId, c.var.userId).all<Row>();
+    return c.json({
+      rides: results.map((r) => ({
+        id: r.id, name: r.name, riddenAt: r.ridden_at, distanceM: r.distance_m, timeS: r.time_s,
+        tierM: JSON.parse(r.tier_m as string), polyline: trimEnds(r.polyline as string),
+        stats: r.stats ? JSON.parse(r.stats as string) : null,
+        rider: r.display_name || String(r.email).split("@")[0], avatar: avatarUrl(r.user_id, r.avatar_at), mine: false,
       })),
     });
   });

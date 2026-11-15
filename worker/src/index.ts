@@ -140,7 +140,7 @@ async function mergeDevice(db: D1Database, device: string, account: string) {
 
 for (const path of [
   "/api/me", "/api/me/*", "/api/routes", "/api/routes/*", "/api/rides", "/api/rides/*", "/api/feedback", "/api/feedback/*",
-  "/api/crews", "/api/crews/*", "/api/group-rides", "/api/group-rides/*", "/api/avatars/*",
+  "/api/crews", "/api/crews/*", "/api/group-rides", "/api/group-rides/*", "/api/avatars/*", "/api/crew-rides",
 ]) {
   app.use(path, identify);
 }
@@ -241,24 +241,35 @@ function rideOut(r: Record<string, string | number>) {
   return {
     id: r.id, routeId: r.route_id ?? null, name: r.name, riddenAt: r.ridden_at, distanceM: r.distance_m,
     timeS: r.time_s, tierM: JSON.parse(r.tier_m as string), polyline: r.polyline, source: r.source, visibility: r.visibility,
-    predictedS: r.predicted_s ?? null,
+    predictedS: r.predicted_s ?? null, stats: r.stats ? JSON.parse(r.stats as string) : null, hasTrack: !!r.has_track,
   };
 }
 
+// Lists leave the (large) GPS track out; the detail endpoint sends it.
+const RIDE_LIST_COLUMNS = `id, route_id, name, ridden_at, distance_m, time_s, tier_m, polyline, source, visibility, predicted_s, stats,
+  track IS NOT NULL AS has_track`;
+
 app.get("/api/rides", async (c) => {
-  const { results } = await c.env.DB.prepare("SELECT * FROM rides WHERE user_id = ? ORDER BY ridden_at DESC LIMIT 500")
+  const { results } = await c.env.DB.prepare(`SELECT ${RIDE_LIST_COLUMNS} FROM rides WHERE user_id = ? ORDER BY ridden_at DESC LIMIT 500`)
     .bind(c.var.userId).all<Record<string, string | number>>();
   return c.json({ rides: results.map(rideOut) });
+});
+
+app.get("/api/rides/:id", async (c) => {
+  const r = await c.env.DB.prepare(`SELECT ${RIDE_LIST_COLUMNS}, track FROM rides WHERE id = ? AND user_id = ?`)
+    .bind(c.req.param("id"), c.var.userId).first<Record<string, string | number>>();
+  if (!r) return c.json({ error: "not found" }, 404);
+  return c.json({ ride: { ...rideOut(r), track: r.track ? JSON.parse(r.track as string) : null } });
 });
 
 app.post("/api/rides", async (c) => {
   const b = rideBody(await body(c));
   const id = crypto.randomUUID();
   await c.env.DB.prepare(
-    `INSERT INTO rides (id, user_id, route_id, name, ridden_at, distance_m, time_s, tier_m, polyline, source, visibility, predicted_s)
-     VALUES (?, ?, (SELECT id FROM routes WHERE id = ? AND user_id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO rides (id, user_id, route_id, name, ridden_at, distance_m, time_s, tier_m, polyline, source, visibility, predicted_s, track, stats)
+     VALUES (?, ?, (SELECT id FROM routes WHERE id = ? AND user_id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(id, c.var.userId, b.routeId, c.var.userId, b.name, b.riddenAt, b.distanceM, b.timeS, JSON.stringify(b.tierM),
-    b.polyline, b.source, b.visibility, b.predictedS).run();
+    b.polyline, b.source, b.visibility, b.predictedS, b.track, b.stats).run();
   return c.json({ id }, 201);
 });
 

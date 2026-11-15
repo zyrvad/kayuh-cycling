@@ -4,13 +4,12 @@ import { api, type CrewSummary, type NewRoute } from "../api.ts";
 import { router } from "../routerClient.ts";
 import {
   addStop, cap, current, groupCap, loopKm, me, mode, movePoint, openCrew, openGroupRide, refreshMe, pickIndex, planError, planning, points, prefs, removePoint, results,
-  reverseRoute, routeName, savedRouteId, screen, selected, settings, sharedName, showToast,
+  reverseRoute, routeName, savedRouteId, screen, selected, settings, sharedName, showToast, startRide,
 } from "../state.ts";
 import { duration, encodePolyline, km, OPERATOR_NAMES } from "../util.ts";
 import { Compass, Sheet, TierBar } from "./common.tsx";
 import { Back, Bookmark, ChevronDown, ChevronUp, Close, Grip, Plus, Share, Swap, Timer, Watch } from "./Icons.tsx";
 import type { MapView } from "../map.ts";
-import { requestCompass } from "../heading.ts";
 import { SearchSheet } from "./SearchSheet.tsx";
 import { ShareSheet } from "./ShareSheet.tsx";
 
@@ -302,7 +301,7 @@ export function Plan({ map }: { map: MapView | null }) {
           </button>
           <button class="icon-btn outline" aria-label="Share route" onClick={() => setSharing(true)}><Share /></button>
           <button class="btn outline grow nowrap" onClick={() => sendToWatch(r)}><Watch /> To watch</button>
-          <button class="btn primary grow" onClick={() => { requestCompass(); screen.value = "ride"; }}>Start ride</button>
+          <button class="btn primary grow" onClick={() => startRide(r)}>Start ride</button>
         </div>
       )}
 

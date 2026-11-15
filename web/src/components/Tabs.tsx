@@ -1,5 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import { api, type Ride, type SavedRoute } from "../api.ts";
+import { api, type SavedRoute } from "../api.ts";
 import {
   loopKm, me, mode, pace, points, refreshMe, routerInfo, savedRouteId, screen, settings, showToast, updateSettings, type Settings,
 } from "../state.ts";
@@ -60,47 +60,6 @@ export function RoutesTab() {
         <ShareSheet name={sharing.name} routeId={async () => sharing.id} onClose={() => { setSharing(null); reload(); }}
           summary={`${km(sharing.distanceM)} km · ${duration(sharing.timeS)} · ${sharing.legs} leg${sharing.legs > 1 ? "s" : ""}`} />
       )}
-    </>
-  );
-}
-
-export function RidesTab() {
-  const [rides, error, reload] = useLoad(api.rides);
-  const total = (rides ?? []).reduce((a, r) => a + r.distanceM, 0);
-  const pcn = (rides ?? []).reduce((a, r) => a + r.tierM[0], 0);
-  const toggle = async (r: Ride) => {
-    await api.setRideVisibility(r.id, r.visibility === "private" ? "crew" : "private").catch((e) => showToast(e.message));
-    reload();
-  };
-  return (
-    <>
-      <Page title="Your rides">
-        {error && <div class="banner warn">{error}</div>}
-        <div class="stat-tiles">
-          <div><span class="big">{km(total)}</span><small>km ridden</small></div>
-          <div><span class="big">{km(pcn)}</span><small>km on park connectors</small></div>
-          <div><span class="big">{rides?.length ?? 0}</span><small>rides</small></div>
-        </div>
-        <p class="muted small">Rides are private. Share one with your crew when crews arrive.</p>
-        <ul class="list">
-          {rides?.map((r) => (
-            <li key={r.id} class="list-card">
-              <div class="list-main">
-                <strong>{r.name}</strong>
-                <span class="muted">{new Date(r.riddenAt).toLocaleDateString("en-SG", { weekday: "short", day: "numeric", month: "short" })} · {km(r.distanceM)} km · {duration(r.timeS)}</span>
-                <TierBar tierM={r.tierM} height={6} />
-              </div>
-              <button class="pill-btn" aria-pressed={r.visibility === "crew"} onClick={() => toggle(r)}>{r.visibility === "crew" ? "Crew" : "Private"}</button>
-              <button class="mini-btn" aria-label={`Delete ${r.name}`} onClick={async () => {
-                if (!confirm("Delete this ride?")) return;
-                await api.deleteRide(r.id).catch((e) => showToast(e.message));
-                reload();
-              }}><Trash /></button>
-            </li>
-          ))}
-        </ul>
-      </Page>
-      <TabBar />
     </>
   );
 }

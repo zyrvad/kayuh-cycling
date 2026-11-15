@@ -1,8 +1,9 @@
 import { useEffect, useState } from "preact/hooks";
 import type { LonLat, RouteResult } from "@kayuh/router";
 import { router, type NearbyParking } from "../routerClient.ts";
+import { api, type GroupRideSummary } from "../api.ts";
 import {
-  cap, conditions, groupCap, locate, loopKm, me, mode, myLocation, pickIndex, points, prefs, refreshConditions, routerInfo,
+  cap, conditions, groupCap, locate, loopKm, me, mode, myLocation, openGroupRide, pickIndex, points, prefs, refreshConditions, routerInfo,
   screen, settings, type Mode,
 } from "../state.ts";
 import { duration, km, OPERATOR_NAMES, sunset, TIER_COLORS, timeOfDay } from "../util.ts";
@@ -18,9 +19,14 @@ export function Discover({ map }: { map: MapView | null }) {
   const [legend, setLegend] = useState(true);
   const [parking, setParking] = useState<NearbyParking[]>([]);
   const [suggestions, setSuggestions] = useState<{ km: number; r: RouteResult }[]>([]);
+  const [nextRide, setNextRide] = useState<GroupRideSummary | null>(null);
   const here = myLocation.value ?? FALLBACK;
 
   useEffect(() => { locate(); }, []);
+  // Your crew's next group ride, if any: the thing you most likely opened the app for.
+  useEffect(() => {
+    if (me.value?.signedIn) api.groupRides().then((rs) => setNextRide(rs.find((r) => r.myStatus !== "no") ?? null)).catch(() => {});
+  }, [me.value?.signedIn]);
   useEffect(() => {
     refreshConditions(here);
     router.parkingNear(here, 400).then(setParking).catch(() => setParking([]));
@@ -101,6 +107,16 @@ export function Discover({ map }: { map: MapView | null }) {
           </div>
           <span class="pill-soft">{OPERATOR_NAMES[settings.value.operator]}</span>
         </div>
+        {nextRide && (
+          <button class="next-ride" onClick={() => openGroupRide(nextRide.id)}>
+            <span class="eyebrow">Next group ride{nextRide.crewName ? ` · ${nextRide.crewName}` : ""}</span>
+            <strong>{nextRide.title}</strong>
+            <span class="muted">
+              {new Date(nextRide.startsAt).toLocaleString("en-SG", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+              {" · "}{nextRide.meet.name} · {nextRide.going} going{nextRide.myStatus ? "" : " · tap to RSVP"}
+            </span>
+          </button>
+        )}
         <div class="cond-chips">
           {c?.forecast && <span class={c.forecast.rainLikely ? "cond warn" : "cond"}>{c.forecast.text} · {c.forecast.area}</span>}
           {c?.tempC && <span class="cond">{Math.round(c.tempC.value)}°C{c.heat ? ` · heat ${c.heat.level.toLowerCase()}` : ""}</span>}
