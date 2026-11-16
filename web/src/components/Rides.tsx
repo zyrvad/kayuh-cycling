@@ -8,6 +8,7 @@ import { analyse, BEST_EFFORTS, BEST_LABEL, decodeTrack, speedColor, SPEED_LEGEN
 import { clock, decodePolyline, duration, km, TIER_COLORS, TIER_LABELS } from "../util.ts";
 import { Avatar, Page, Sheet, TabBar, TierBar } from "./common.tsx";
 import { Back, Close, Share, Trash } from "./Icons.tsx";
+import { Flyover } from "./Flyover.tsx";
 import { openSaved } from "./Tabs.tsx";
 import "./feed.css";
 
@@ -243,6 +244,7 @@ function RideDetailPage({ id, all, map, onChange }: { id: string; all: Ride[]; m
   const [ride, setRide] = useState<RideDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [colour, setColour] = useState<"speed" | "path">("speed");
+  const [flying, setFlying] = useState(false);
   const [cursor, setCursor] = useState<number | null>(null);
   const [picking, setPicking] = useState(false);
   const [crews, setCrews] = useState<CrewSummary[] | null>(null);
@@ -287,9 +289,18 @@ function RideDetailPage({ id, all, map, onChange }: { id: string; all: Ride[]; m
     ? all.filter((r) => r.routeId === ride.routeId).sort((x, y) => (x.stats?.movingS ?? x.timeS) - (y.stats?.movingS ?? y.timeS))
     : [];
 
+  // The 3D replay takes over the screen; the map keeps the line drawn underneath.
+  if (flying && map && line.length > 1) {
+    return (
+      <Flyover map={map} coords={line} title={title} onClose={() => setFlying(false)}
+        times={samples?.map((x) => x.t)} colors={a && samples ? samples.map((_, i) => speedColor(a.speed[i])) : undefined} />
+    );
+  }
+
   return (
     <>
       <button class="icon-btn raised detail-back" aria-label="Back" onClick={closeRide}><Back /></button>
+      {line.length > 1 && map && <button class="btn raised detail-fly" onClick={() => setFlying(true)}>Flyover</button>}
       {a && (
         <div class="segmented detail-colour" role="group" aria-label="Colour the line by">
           <button class={colour === "speed" ? "seg active" : "seg"} aria-pressed={colour === "speed"} onClick={() => setColour("speed")}>Speed</button>

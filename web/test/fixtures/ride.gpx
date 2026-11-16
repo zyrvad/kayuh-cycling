@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Test Watch" xmlns="http://www.topografix.com/GPX/1/1"
+     xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1" xmlns:pwr="http://www.garmin.com/xmlschemas/PowerExtension/v1">
+  <metadata><name>Metadata name</name></metadata>
+  <trk>
+    <name>Morning &amp; coast</name>
+    <trkseg>
+      <trkpt lat="1.3000" lon="103.8000"><ele>10.4</ele><time>2026-11-01T07:00:00Z</time>
+        <extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>120</gpxtpx:hr><gpxtpx:cad>80</gpxtpx:cad></gpxtpx:TrackPointExtension><pwr:PowerInWatts>150</pwr:PowerInWatts></extensions></trkpt>
+      <trkpt lon='103.8010' lat='1.3000'><ele>11</ele><time>2026-11-01T07:00:05Z</time>
+        <extensions><power>200</power><ns3:TrackPointExtension xmlns:ns3="x"><ns3:hr>130</ns3:hr></ns3:TrackPointExtension></extensions></trkpt>
+      <trkpt lat="1.3000" lon="103.8020"><time>2026-11-01T07:00:10Z</time></trkpt>
+      <trkpt lat="1.3000" lon="103.8030"><ele>12</ele></trkpt>
+    </trkseg>
+  </trk>
+</gpx>

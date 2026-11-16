@@ -4,7 +4,7 @@ import type { App, Ctx } from "./index.ts";
 import { AVATAR_AT, avatarUrl } from "./avatars.ts";
 import { trimEnds } from "./polyline.ts";
 import { leaveCrewStatements } from "./social.ts";
-import { crewNameBody, crewRouteBody, groupRideBody, joinBody, jsonBody, rsvpBody } from "./validate.ts";
+import { crewNameBody, crewRouteBody, groupRideBody, joinBody, jsonBody, publicStats, rsvpBody } from "./validate.ts";
 
 const body = (c: Ctx) => jsonBody(c.req);
 
@@ -191,7 +191,7 @@ export function registerCrews(app: Hono<App>) {
       rides: results.map((r) => ({
         id: r.id, name: r.name, riddenAt: r.ridden_at, distanceM: r.distance_m, timeS: r.time_s,
         tierM: JSON.parse(r.tier_m as string), polyline: trimEnds(r.polyline as string),
-        stats: r.stats ? JSON.parse(r.stats as string) : null,
+        stats: r.stats ? publicStats(JSON.parse(r.stats as string)) : null,
         rider: r.display_name || String(r.email).split("@")[0], avatar: avatarUrl(r.user_id, r.avatar_at), mine: false,
       })),
     });

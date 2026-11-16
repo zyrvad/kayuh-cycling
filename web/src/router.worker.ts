@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 /** Runs the router off the main thread: loads graph.bin + pois.json once, then answers plan requests. */
 import {
-  createContext, haversine, parseGraph, parkingName, planAlternatives, planLoops, PoiIndex, toGpx,
+  classifyPoints, createContext, haversine, parseGraph, parkingName, planAlternatives, planLoops, PoiIndex, toGpx,
   type LoopRequest, type PlanContext, type PlanRequest, type Poi,
 } from "@kayuh/router";
 
@@ -11,6 +11,7 @@ export type WorkerRequest =
   | { type: "gpx"; route: Parameters<typeof toGpx>[0]; name: string }
   | { type: "parkingNear"; lon: number; lat: number; radiusM: number }
   | { type: "pois" }
+  | { type: "classify"; coords: [number, number][] }
   | { type: "parkingNearRoute"; coords: [number, number][]; radiusM: number };
 
 let ctx: PlanContext | null = null;
@@ -38,6 +39,8 @@ function handle(msg: WorkerRequest): unknown {
       return c.pois.near(msg.lon, msg.lat, msg.radiusM, "parking").map(({ poi, dist }) => ({ ...poi, name: parkingName(poi), dist: Math.round(dist) }));
     case "pois":
       return pois;
+    case "classify":
+      return classifyPoints(c.graph, msg.coords);
     case "parkingNearRoute": {
       // Sample the line every radius/2, interpolating along long straight segments,
       // so nothing within reach slips between samples.

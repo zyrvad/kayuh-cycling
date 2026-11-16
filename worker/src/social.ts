@@ -6,7 +6,7 @@ import type { Hono } from "hono";
 import type { App, Ctx } from "./index.ts";
 import { AVATAR_AT, avatarUrl } from "./avatars.ts";
 import { trimEnds } from "./polyline.ts";
-import { BadRequest, commentBody, feedQuery, followBody, jsonBody, privateAccountBody, sharingBody } from "./validate.ts";
+import { BadRequest, commentBody, feedQuery, followBody, jsonBody, privateAccountBody, publicStats, sharingBody } from "./validate.ts";
 
 type Row = Record<string, string | number | null>;
 type Stmt = D1PreparedStatement;
@@ -173,7 +173,8 @@ export function registerSocial(app: Hono<App>) {
           id: r.id, name: r.name, riddenAt: r.ridden_at, distanceM: r.distance_m, timeS: r.time_s, tierM: JSON.parse(r.tier_m as string),
           // Never send anyone else the first and last 200 m: that's where people's homes are.
           polyline: mine ? r.polyline : trimEnds(r.polyline as string),
-          stats: r.stats ? JSON.parse(r.stats as string) : null, mine, rider: person(r),
+          // Heart rate, effort and power are the rider's own: others get the plain ride numbers.
+          stats: r.stats ? (mine ? JSON.parse(r.stats as string) : publicStats(JSON.parse(r.stats as string))) : null, mine, rider: person(r),
           kudos: Number(r.kudos), kudoed: !!r.kudoed, comments: Number(r.comment_count), crews: crewsOf.get(r.id as string) ?? [],
         };
       }),

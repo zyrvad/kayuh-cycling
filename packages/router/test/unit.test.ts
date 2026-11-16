@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  createContext, F_BWD, F_FWD, finishGraph, haversine, nearestNode, PCN, planAlternatives, planRoute, PoiIndex,
+  classifyPoints, createContext, F_BWD, F_FWD, finishGraph, haversine, nearestNode, PCN, planAlternatives, planRoute, PoiIndex,
   ROAD, toGpx, type Graph, type LonLat, type Poi,
 } from "../src/index.ts";
 
@@ -150,4 +150,19 @@ test("a parking spot on a one-way dead end is never used as a leg stop", () => {
   const r = planRoute(createContext(g, pois), { points: [nodes[0], nodes[20]], capMinutes: 30 }, "nicest");
   assert.ok(r.legs.every((l) => l.to.parking?.node !== 21));
   assert.equal(r.legs.at(-1)?.to.parking?.node, 20);
+});
+
+test("classifyPoints gives the best tier at the nearest node, or -1 off the network", () => {
+  const g = triangle();
+  // S touches a road edge and a PCN edge: the best (lowest) tier wins. T touches a road edge and a PCN edge too.
+  const nearS: LonLat = [S[0] + 0.0001, S[1]]; // ~11 m
+  const farAway: LonLat = [103.9, 1.4];
+  const between: LonLat = [103.805, 1.3]; // ~550 m from every node
+  assert.deepEqual(classifyPoints(g, [nearS, farAway, between, M]), [PCN, -1, -1, PCN]);
+  // A node with only road edges classes as road.
+  const roads = makeGraph([S, T], [[0, 1, ROAD]]);
+  assert.deepEqual(classifyPoints(roads, [S, T]), [ROAD, ROAD]);
+  // One-way edge into a node counts even though adjacency can't leave by it.
+  const oneWay = makeGraph([S, T, M], [[0, 1, PCN, F_FWD], [1, 2, ROAD], [2, 1, ROAD]]);
+  assert.equal(classifyPoints(oneWay, [T])[0], PCN);
 });

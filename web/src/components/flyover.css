@@ -1,0 +1,21 @@
+/* Flyover: controls over the map. The wrapper ignores touches so a paused map can still be panned and rotated. */
+.fly { position: absolute; inset: 0; z-index: 30; pointer-events: none; }
+.fly > * { pointer-events: none; }
+.fly button, .fly input, .fly .fly-stats, .fly .fly-note { pointer-events: auto; }
+.fly-top { position: absolute; left: 16px; right: 16px; top: calc(16px + env(safe-area-inset-top, 0px)); display: flex; align-items: center; gap: 10px; }
+.fly-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 8px 14px; min-height: 44px; justify-content: center; background: rgba(255, 255, 255, 0.95); border-radius: 12px; box-shadow: var(--shadow); }
+.fly-title strong { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fly-tag { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+.fly-bar { position: absolute; left: 12px; right: 12px; bottom: calc(12px + var(--safe-bottom)); display: flex; flex-direction: column; gap: 10px; padding: 14px; background: rgba(255, 255, 255, 0.96); border-radius: 18px; box-shadow: var(--shadow-up); pointer-events: auto; }
+.fly-note { font-size: 13px; color: var(--muted); background: var(--soft); border-radius: 10px; padding: 8px 10px; }
+.fly-stats { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.fly-stats b { color: var(--ink); font-weight: 800; }
+.fly-scrub { width: 100%; height: 44px; margin: -8px 0; accent-color: var(--accent); touch-action: none; }
+.fly-controls { display: flex; gap: 10px; align-items: center; }
+.fly-play { flex: 1; min-width: 96px; height: 48px; }
+.fly-speed { flex: 1.4; }
+.fly-speed .seg { height: 44px; min-width: 44px; }
+
+/* Opening a flyover shows the map even on screens that normally hide it (Rides, Crew). */
+.app:has(.fly) .map { visibility: visible; }
+.detail-fly { position: absolute; left: 72px; top: calc(16px + env(safe-area-inset-top, 0px)); z-index: 4; height: 44px; padding: 0 14px; font-size: 14px; }

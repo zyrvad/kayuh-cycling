@@ -9,7 +9,7 @@ import {
   deleteRideStatements, person, PERSON_COLUMNS, registerSocial, shareStatements, SOCIAL_COUNTS, viewer, VISIBLE_RIDES,
 } from "./social.ts";
 import {
-  BadRequest, feedbackBody, inSingapore, jsonBody, meBody, rideBody, routeBody, visibilityBody,
+  BadRequest, effortBody, feedbackBody, inSingapore, jsonBody, meBody, publicStats, rideBody, routeBody, visibilityBody,
 } from "./validate.ts";
 
 export interface Env extends AuthEnv {
@@ -165,21 +165,34 @@ app.use("/api/*", async (c, next) => {
   await next();
 });
 
+const PHYSIOLOGY = "birth_year, max_hr, rest_hr, ftp_w, weight_kg";
+type Physiology = { birth_year: number | null; max_hr: number | null; rest_hr: number | null; ftp_w: number | null; weight_kg: number | null };
+const physiologyOut = (u: Physiology) => ({ birthYear: u.birth_year, maxHr: u.max_hr, restHr: u.rest_hr, ftpW: u.ftp_w, weightKg: u.weight_kg });
+
 app.get("/api/me", async (c) => {
-  const u = await c.env.DB.prepare(`SELECT operator, cap_minutes, speed_kmh, display_name, ${AVATAR_AT("users")} FROM users WHERE id = ?`)
-    .bind(c.var.userId).first<{ operator: string; cap_minutes: number; speed_kmh: number; display_name: string | null; avatar_at: string | null }>();
+  const u = await c.env.DB.prepare(`SELECT operator, cap_minutes, speed_kmh, display_name, ${PHYSIOLOGY}, ${AVATAR_AT("users")} FROM users WHERE id = ?`)
+    .bind(c.var.userId).first<{ operator: string; cap_minutes: number; speed_kmh: number; display_name: string | null; avatar_at: string | null } & Physiology>();
   return c.json({
     id: c.var.account ? c.var.userId : null, email: c.var.email, displayName: u!.display_name, avatar: avatarUrl(c.var.userId, u!.avatar_at),
-    operator: u!.operator, capMinutes: u!.cap_minutes, speedKmh: u!.speed_kmh, signedIn: c.var.account,
+    operator: u!.operator, capMinutes: u!.cap_minutes, speedKmh: u!.speed_kmh, signedIn: c.var.account, ...physiologyOut(u!),
   });
 });
 
 app.put("/api/me", async (c) => {
   const b = meBody(await body(c));
+  // Physiology: a field left out keeps its saved value; null clears it (older app versions send neither).
+  const keep = (v: unknown) => (v === undefined ? 0 : 1);
   await c.env.DB.prepare(
-    "UPDATE users SET operator = ?, cap_minutes = ?, speed_kmh = ?, display_name = COALESCE(?, display_name) WHERE id = ?",
-  ).bind(b.operator, b.capMinutes, b.speedKmh, b.displayName, c.var.userId).run();
-  return c.json(b);
+    `UPDATE users SET operator = ?, cap_minutes = ?, speed_kmh = ?, display_name = COALESCE(?, display_name),
+       birth_year = CASE WHEN ? THEN ? ELSE birth_year END, max_hr = CASE WHEN ? THEN ? ELSE max_hr END,
+       rest_hr = CASE WHEN ? THEN ? ELSE rest_hr END, ftp_w = CASE WHEN ? THEN ? ELSE ftp_w END,
+       weight_kg = CASE WHEN ? THEN ? ELSE weight_kg END
+     WHERE id = ?`,
+  ).bind(b.operator, b.capMinutes, b.speedKmh, b.displayName,
+    keep(b.birthYear), b.birthYear ?? null, keep(b.maxHr), b.maxHr ?? null, keep(b.restHr), b.restHr ?? null,
+    keep(b.ftpW), b.ftpW ?? null, keep(b.weightKg), b.weightKg ?? null, c.var.userId).run();
+  const u = await c.env.DB.prepare(`SELECT ${PHYSIOLOGY} FROM users WHERE id = ?`).bind(c.var.userId).first<Physiology>();
+  return c.json({ operator: b.operator, capMinutes: b.capMinutes, speedKmh: b.speedKmh, displayName: b.displayName, ...physiologyOut(u!) });
 });
 
 registerCrews(app);
@@ -262,14 +275,14 @@ function rideOut(r: Record<string, string | number>) {
   return {
     id: r.id, routeId: r.route_id ?? null, name: r.name, riddenAt: r.ridden_at, distanceM: r.distance_m,
     timeS: r.time_s, tierM: JSON.parse(r.tier_m as string), polyline: r.polyline, source: r.source, visibility: r.visibility,
-    predictedS: r.predicted_s ?? null, stats: r.stats ? JSON.parse(r.stats as string) : null, hasTrack: !!r.has_track,
+    predictedS: r.predicted_s ?? null, stats: r.stats ? JSON.parse(r.stats as string) : null, hasTrack: !!r.has_track, rpe: r.rpe ?? null,
     sharedCrewIds: JSON.parse(r.shared_crews as string) as string[], shareFollowers: !!r.share_followers,
   };
 }
 
 // Lists leave the (large) GPS track out; the detail endpoint sends it.
 const RIDE_LIST_COLUMNS = `r.id, r.route_id, r.name, r.ridden_at, r.distance_m, r.time_s, r.tier_m, r.polyline, r.source, r.visibility,
-  r.predicted_s, r.stats, r.track IS NOT NULL AS has_track, r.share_followers,
+  r.predicted_s, r.stats, r.rpe, r.track IS NOT NULL AS has_track, r.share_followers,
   (SELECT json_group_array(crew_id) FROM ride_shares WHERE ride_id = r.id) AS shared_crews`;
 
 app.get("/api/rides", async (c) => {
@@ -296,21 +309,29 @@ app.get("/api/rides/:id", async (c) => {
     return c.json({ ride: { ...rideOut(r), ...social, mine: true, track: t?.track ? JSON.parse(t.track) : null } });
   }
   // Leave out anything about how it was recorded or who else sees it.
-  const { sharedCrewIds: _c, shareFollowers: _f, source: _s, visibility: _v, predictedS: _p, routeId: _r, ...out } = rideOut(r);
-  return c.json({ ride: { ...out, ...social, mine: false, hasTrack: false, polyline: trimEnds(r.polyline as string) } });
+  // Heart rate, effort and power are health data: the rider only.
+  const { sharedCrewIds: _c, shareFollowers: _f, source: _s, visibility: _v, predictedS: _p, routeId: _r, rpe: _e, ...out } = rideOut(r);
+  return c.json({ ride: { ...out, stats: publicStats(out.stats), ...social, mine: false, hasTrack: false, polyline: trimEnds(r.polyline as string) } });
 });
 
 app.post("/api/rides", async (c) => {
   const b = rideBody(await body(c));
   const id = crypto.randomUUID();
   await c.env.DB.prepare(
-    `INSERT INTO rides (id, user_id, route_id, name, ridden_at, distance_m, time_s, tier_m, polyline, source, visibility, predicted_s, track, stats)
-     VALUES (?, ?, (SELECT id FROM routes WHERE id = ? AND user_id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO rides (id, user_id, route_id, name, ridden_at, distance_m, time_s, tier_m, polyline, source, visibility, predicted_s, track, stats, rpe)
+     VALUES (?, ?, (SELECT id FROM routes WHERE id = ? AND user_id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(id, c.var.userId, b.routeId, c.var.userId, b.name, b.riddenAt, b.distanceM, b.timeS, JSON.stringify(b.tierM),
-    b.polyline, b.source, "private", b.predictedS, b.track, b.stats).run();
+    b.polyline, b.source, "private", b.predictedS, b.track, b.stats, b.rpe).run();
   // "crew" at save time means every crew you're in, as before per-crew sharing.
   if (b.visibility === "crew") await c.env.DB.batch(shareStatements(c.env.DB, id, c.var.userId, "all", null));
   return c.json({ id }, 201);
+});
+
+// How hard the ride felt, 1-10 (null clears it). Owner only, like all training data.
+app.put("/api/rides/:id/effort", async (c) => {
+  const rpe = effortBody(await body(c));
+  const res = await c.env.DB.prepare("UPDATE rides SET rpe = ? WHERE id = ? AND user_id = ?").bind(rpe, c.req.param("id"), c.var.userId).run();
+  return res.meta.changes ? c.json({ rpe }) : c.json({ error: "not found" }, 404);
 });
 
 // The old all-or-nothing switch (kept for older app versions): "crew" shares with every crew you're

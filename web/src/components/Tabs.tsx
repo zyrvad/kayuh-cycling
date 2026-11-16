@@ -116,6 +116,10 @@ export function MeTab() {
           <p class="muted small">Roads are always a last resort. Expressways are never used.</p>
         </section>
         <section class="group">
+          <h2>Heart rate &amp; power</h2>
+          <BodySettings />
+        </section>
+        <section class="group">
           <h2>Account</h2>
           <Account />
         </section>
@@ -133,6 +137,42 @@ export function MeTab() {
       </Page>
       <TabBar />
     </>
+  );
+}
+
+/** The five optional numbers behind heart-rate zones, Relative Effort and power metrics. */
+function BodySettings() {
+  const m = me.value;
+  const s = settings.value;
+  const str = (n: number | null | undefined) => (n === null || n === undefined ? "" : String(n));
+  useEffect(() => { if (!m) refreshMe(); }, []);
+  const [v, setV] = useState({ birthYear: "", maxHr: "", restHr: "", ftpW: "", weightKg: "" });
+  useEffect(() => {
+    if (m) setV({ birthYear: str(m.birthYear), maxHr: str(m.maxHr), restHr: str(m.restHr), ftpW: str(m.ftpW), weightKg: str(m.weightKg) });
+  }, [m?.birthYear, m?.maxHr, m?.restHr, m?.ftpW, m?.weightKg]);
+  const field = (k: keyof typeof v, label: string, hint: string, min: number, max: number, step = 1) => (
+    <label class="field"><span>{label}</span>
+      <input type="number" inputMode="decimal" min={min} max={max} step={step} value={v[k]} onInput={(e) => setV({ ...v, [k]: (e.target as HTMLInputElement).value })} />
+      <span class="muted small">{hint}</span>
+    </label>
+  );
+  return (
+    <form class="stack-8" onSubmit={async (e) => {
+      e.preventDefault();
+      const n = (x: string) => (x.trim() === "" ? null : Number(x));
+      await api.saveMe({
+        operator: s.operator, capMinutes: s.capMinutes, speedKmh: s.speedKmh,
+        birthYear: n(v.birthYear), maxHr: n(v.maxHr), restHr: n(v.restHr), ftpW: n(v.ftpW), weightKg: n(v.weightKg),
+      }).then(refreshMe).then(() => showToast("Saved")).catch((err) => showToast(err.message));
+    }}>
+      <p class="muted small">Optional. Used for your heart-rate zones, effort and power numbers, which only you can see.</p>
+      {field("birthYear", "Birth year", "Used to estimate your max heart rate if you don't enter it", 1920, new Date().getFullYear())}
+      {field("maxHr", "Max heart rate (bpm)", "Used for heart-rate zones; leave blank to estimate from your age", 120, 230)}
+      {field("restHr", "Resting heart rate (bpm)", "Your heart rate when you wake up, before getting out of bed", 30, 100)}
+      {field("ftpW", "FTP (watts)", "The power you could hold for about an hour; sets your power zones and training stress", 50, 600)}
+      {field("weightKg", "Weight (kg)", "For watts per kilogram", 30, 200, 0.1)}
+      <button class="btn primary">Save</button>
+    </form>
   );
 }
 

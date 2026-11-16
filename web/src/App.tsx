@@ -121,7 +121,7 @@ export function App() {
       {s === "ride" && (current.value || loadActiveRide()) && <Ride map={map} />}
       {s === "routes" && <RoutesTab />}
       {s === "rides" && <RidesTab map={map} />}
-      {s === "crew" && <CrewTab />}
+      {s === "crew" && <CrewTab map={map} />}
       {s === "me" && <MeTab />}
       {showOnboarding.value && s !== "ride" && !hasActiveRide() && <Onboarding />}
       {toast.value && <div class="toast" role="status">{toast.value}</div>}

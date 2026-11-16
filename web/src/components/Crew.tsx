@@ -3,7 +3,9 @@ import { api, devEmail, type CrewDetail, type CrewRide, type CrewRoute, type Cre
 import {
   crewView, groupCap, me, mode, openCrew, openGroupRide, openRide, points, refreshMe, savedRouteId, screen, sharedName, showToast,
 } from "../state.ts";
-import { duration, km, OPERATOR_NAMES } from "../util.ts";
+import { decodePolyline, duration, km, OPERATOR_NAMES } from "../util.ts";
+import type { MapView } from "../map.ts";
+import { Flyover } from "./Flyover.tsx";
 import { Avatar, Page, TabBar, TierBar } from "./common.tsx";
 import { crewSegment, Feed } from "./Feed.tsx";
 import { Back, Share, Trash } from "./Icons.tsx";
@@ -22,7 +24,7 @@ async function shareLink(title: string, url: string) {
   }
 }
 
-export function CrewTab() {
+export function CrewTab({ map }: { map: MapView | null }) {
   useEffect(() => { if (!me.value) refreshMe(); }, []);
   const v = crewView.value;
   return (
@@ -30,7 +32,7 @@ export function CrewTab() {
       {!me.value ? <Page title="Crew"><p class="muted">Loading…</p></Page>
         : !me.value.signedIn ? <SignIn />
         : v.kind === "crew" ? <CrewPage id={v.id} />
-        : v.kind === "ride" ? <GroupRidePage id={v.id} />
+        : v.kind === "ride" ? <GroupRidePage id={v.id} map={map} />
         : <CrewHome />}
       <TabBar />
     </>
@@ -275,8 +277,9 @@ function CrewPage({ id }: { id: string }) {
   );
 }
 
-function GroupRidePage({ id }: { id: string }) {
+function GroupRidePage({ id, map }: { id: string; map: MapView | null }) {
   const [ride, setRide] = useState<GroupRideDetail | null>(null);
+  const [flying, setFlying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const load = () => api.groupRide(id).then(setRide).catch((e) => setError(e.message));
   useEffect(() => { load(); }, [id]);
@@ -293,6 +296,11 @@ function GroupRidePage({ id }: { id: string }) {
     savedRouteId.value = null;
     screen.value = "plan";
   };
+
+  // Preview the planned route as a 3D flyover before the ride.
+  if (flying && ride && map) {
+    return <Flyover map={map} coords={decodePolyline(ride.route.polyline)} title={ride.title} onClose={() => setFlying(false)} />;
+  }
 
   return (
     <Page title={ride?.title ?? "Group ride"}>
@@ -316,6 +324,7 @@ function GroupRidePage({ id }: { id: string }) {
             )}
             {ride.notes && <p class="notes">{ride.notes}</p>}
             <div class="row gap-10">
+              <button class="btn outline grow" onClick={() => setFlying(true)} disabled={!map}>Flyover</button>
               <button class="btn primary grow" onClick={openRoute}>Open route</button>
               <button class="btn outline grow" onClick={async () => {
                 try {

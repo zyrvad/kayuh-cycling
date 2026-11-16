@@ -71,13 +71,15 @@ export interface Ride {
   /** Summary of a recorded ride (null for older or planned-only rides). */
   stats: RideStats | null;
   hasTrack: boolean;
+  /** How hard it felt, 1-10 (yours only, like all heart-rate, effort and power data). */
+  rpe?: number | null;
   /** The crews it's shared with, and whether your followers see it (your own rides only). */
   sharedCrewIds: string[];
   shareFollowers: boolean;
 }
 export interface Person { id: string; name: string; avatar: string | null }
 /** Fields only the rider gets in RideDetail. */
-type OwnerOnly = "sharedCrewIds" | "shareFollowers" | "source" | "visibility" | "predictedS" | "routeId";
+type OwnerOnly = "sharedCrewIds" | "shareFollowers" | "source" | "visibility" | "predictedS" | "routeId" | "rpe";
 /**
  * One ride, yours or someone else's you're allowed to see. Others' rides come without the GPS
  * track, with the line trimmed 200 m at each end, and without how it was recorded or who else sees it.
@@ -101,7 +103,9 @@ export interface FollowInfo {
   /** Crewmates you don't follow yet. */
   suggestions: Person[];
 }
-export interface Me {
+/** Body numbers for heart-rate zones and power metrics; all optional (null = not set). */
+export interface PhysiologySettings { birthYear: number | null; maxHr: number | null; restHr: number | null; ftpW: number | null; weightKg: number | null }
+export interface Me extends PhysiologySettings {
   id: string | null; email: string | null; displayName: string | null;
   operator: "helloride" | "anywheel" | "own"; capMinutes: number; speedKmh: number; signedIn: boolean;
   /** URL of your profile picture, or null. */
@@ -142,7 +146,8 @@ export const api = {
   search: (q: string) => req<{ places: Place[] }>("GET", `/api/search?q=${encodeURIComponent(q)}`).then((r) => r.places),
   conditions: ([lon, lat]: LonLat) => req<Conditions>("GET", `/api/conditions?lat=${lat}&lon=${lon}`),
   me: () => req<Me>("GET", "/api/me"),
-  saveMe: (me: { operator: Me["operator"]; capMinutes: number; speedKmh: number; displayName?: string }) => req<Me>("PUT", "/api/me", me),
+  /** Physiology fields left out keep their saved value; null clears one. */
+  saveMe: (me: { operator: Me["operator"]; capMinutes: number; speedKmh: number; displayName?: string } & Partial<PhysiologySettings>) => req<Me>("PUT", "/api/me", me),
   setAvatar: (image: string) => req<{ avatar: string }>("PUT", "/api/me/avatar", { image }),
   removeAvatar: () => req("DELETE", "/api/me/avatar"),
   crews: () => req<{ crews: CrewSummary[] }>("GET", "/api/crews").then((r) => r.crews),
@@ -175,11 +180,13 @@ export const api = {
   rides: () => req<{ rides: Ride[] }>("GET", "/api/rides").then((r) => r.rides),
   ride: (id: string) => req<{ ride: RideDetail }>("GET", `/api/rides/${id}`).then((r) => r.ride),
   crewFeed: () => req<{ rides: CrewRide[] }>("GET", "/api/crew-rides").then((r) => r.rides),
-  logRide: (r: Omit<Ride, "id" | "visibility" | "routeId" | "predictedS" | "stats" | "hasTrack" | "sharedCrewIds" | "shareFollowers"> & {
-    routeId?: string | null; predictedS?: number | null; track?: TrackJson | null; stats?: RideStats | null;
+  logRide: (r: Omit<Ride, "id" | "visibility" | "routeId" | "predictedS" | "stats" | "hasTrack" | "sharedCrewIds" | "shareFollowers" | "rpe"> & {
+    routeId?: string | null; predictedS?: number | null; track?: TrackJson | null; stats?: RideStats | null; rpe?: number | null;
   }) => req<{ id: string }>("POST", "/api/rides", r),
   setRideVisibility: (id: string, visibility: Ride["visibility"]) => req("PATCH", `/api/rides/${id}`, { visibility }),
   deleteRide: (id: string) => req("DELETE", `/api/rides/${id}`),
+  /** Rate how hard a ride felt, 1-10 (null clears it). */
+  setRideEffort: (id: string, rpe: number | null) => req<{ rpe: number | null }>("PUT", `/api/rides/${id}/effort`, { rpe }),
   rideSharing: (id: string) => req<RideSharing>("GET", `/api/rides/${id}/sharing`),
   setRideSharing: (id: string, s: RideSharing) => req<RideSharing>("PUT", `/api/rides/${id}/sharing`, s),
 

@@ -187,6 +187,29 @@ export class MapView {
     m.addLayer({ id: "done", type: "line", source: "done", layout: { "line-cap": "round", "line-join": "round" },
       paint: { "line-color": "#A7B0AA", "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3.5, 16, 8] } });
 
+    // Flyover (3D replay): extruded buildings from the basemap's own vector source, plus the trail already flown.
+    // Hidden until setFlyover(true); the basemap's flat "building" layer stays underneath.
+    m.addLayer({ id: "buildings-3d", type: "fill-extrusion", source: "openmaptiles", "source-layer": "building", minzoom: 14,
+      layout: { visibility: "none" },
+      paint: {
+        "fill-extrusion-color": "#DCDDD6",
+        "fill-extrusion-height": ["coalesce", ["get", "render_height"], 0],
+        "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
+        "fill-extrusion-opacity": 0.82,
+      } }, before);
+    m.addSource("fly-ahead", { type: "geojson", data: empty() });
+    m.addLayer({ id: "fly-ahead", type: "line", source: "fly-ahead", layout: { "line-cap": "round", "line-join": "round", visibility: "none" },
+      paint: { "line-color": "#17804F", "line-opacity": 0.35, "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3, 17, 8] } });
+    m.addSource("fly-done", { type: "geojson", data: empty() });
+    m.addLayer({ id: "fly-done-casing", type: "line", source: "fly-done", layout: { "line-cap": "round", "line-join": "round", visibility: "none" },
+      paint: { "line-color": "#FFFFFF", "line-width": ["interpolate", ["linear"], ["zoom"], 10, 6, 17, 14] } });
+    m.addLayer({ id: "fly-done", type: "line", source: "fly-done", layout: { "line-cap": "round", "line-join": "round", visibility: "none" },
+      paint: { "line-color": ["get", "color"], "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3.5, 17, 9] } });
+    m.addSource("fly-head", { type: "geojson", data: empty() });
+    m.addLayer({ id: "fly-head", type: "circle", source: "fly-head",
+      layout: { visibility: "none" },
+      paint: { "circle-radius": 8, "circle-color": "#17804F", "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 3, "circle-pitch-alignment": "map" } });
+
     // Traffic lights you'll wait at on the selected route.
     m.addImage("traffic-light", trafficLightIcon(), { pixelRatio: 2 });
     m.addSource("lights", { type: "geojson", data: empty() });
@@ -423,5 +446,60 @@ export class MapView {
 
   setPadding(p: maplibregl.PaddingOptions) {
     this.map.setPadding(p);
+  }
+
+  // ---- Flyover (3D replay) ----
+
+  private savedCamera: { center: LonLat; zoom: number; bearing: number; pitch: number; padding: maplibregl.PaddingOptions } | null = null;
+
+  /** Remember the camera so restoreCamera() can put it back. */
+  saveCamera() {
+    const c = this.map.getCenter();
+    this.savedCamera = { center: [c.lng, c.lat], zoom: this.map.getZoom(), bearing: this.map.getBearing(), pitch: this.map.getPitch(), padding: this.map.getPadding() };
+  }
+
+  /** Back to the saved camera, flat (pitch 0). Does nothing when none was saved. */
+  restoreCamera() {
+    const c = this.savedCamera;
+    if (!c) return;
+    this.savedCamera = null;
+    this.map.setPadding(c.padding);
+    this.map.jumpTo({ center: c.center, zoom: c.zoom, bearing: c.bearing, pitch: 0 });
+  }
+
+  /** Move the camera at once (one call per animation frame). */
+  cameraJump(center: LonLat, zoom: number, bearing: number, pitch: number) {
+    this.map.jumpTo({ center, zoom, bearing, pitch });
+  }
+
+  /**
+   * Flyover on: save the camera, show the 3D buildings and flyover layers, and hide the planned route and recorded
+   * track so they don't double up with the flyover trail. Off: undo all of that and restore the camera.
+   */
+  async setFlyover(on: boolean) {
+    await this.loaded;
+    const flyLayers = ["buildings-3d", "fly-ahead", "fly-done-casing", "fly-done", "fly-head"];
+    const hidden = ["alts", "route-casing", "route", "track-casing", "track", "track-ends", "stops", "k-lights"];
+    const vis = (ids: string[], v: "visible" | "none") => { for (const id of ids) this.map.setLayoutProperty(id, "visibility", v); };
+    if (on) {
+      this.saveCamera();
+      // Zero padding keeps the 3D camera centred on the head regardless of any bottom sheet the page set.
+      this.map.setPadding({ top: 120, bottom: 0, left: 0, right: 0 });
+    } else {
+      this.setFlyoverTrail([], [], null);
+    }
+    vis(flyLayers, on ? "visible" : "none");
+    vis(hidden, on ? "none" : "visible");
+    if (!on) this.restoreCamera();
+  }
+
+  /** Draw the flyover trail: runs already flown (each with a colour), the faint line still ahead, and the head dot. */
+  setFlyoverTrail(done: { coords: LonLat[]; color: string }[], ahead: LonLat[], head: LonLat | null) {
+    const set = (id: string, data: GeoJSON.FeatureCollection) => (this.map.getSource(id) as GeoJSONSource | undefined)?.setData(data);
+    const line = (coords: LonLat[], props: GeoJSON.GeoJsonProperties = {}): GeoJSON.Feature[] =>
+      coords.length > 1 ? [{ type: "Feature", properties: props, geometry: { type: "LineString", coordinates: coords } }] : [];
+    set("fly-done", { type: "FeatureCollection", features: done.flatMap((r) => line(r.coords, { color: r.color })) });
+    set("fly-ahead", { type: "FeatureCollection", features: line(ahead) });
+    set("fly-head", { type: "FeatureCollection", features: head ? [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: head } }] : [] });
   }
 }
