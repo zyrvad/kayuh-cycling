@@ -5,6 +5,7 @@ import {
 } from "../state.ts";
 import { duration, km, OPERATOR_NAMES } from "../util.ts";
 import { Avatar, Page, TabBar, TierBar } from "./common.tsx";
+import { crewSegment, Feed } from "./Feed.tsx";
 import { Back, Share, Trash } from "./Icons.tsx";
 import { openSaved } from "./Tabs.tsx";
 
@@ -30,7 +31,7 @@ export function CrewTab() {
         : !me.value.signedIn ? <SignIn />
         : v.kind === "crew" ? <CrewPage id={v.id} />
         : v.kind === "ride" ? <GroupRidePage id={v.id} />
-        : <CrewList />}
+        : <CrewHome />}
       <TabBar />
     </>
   );
@@ -78,6 +79,20 @@ function RideCard({ r }: { r: GroupRideSummary }) {
   );
 }
 
+/** The Crew tab's top level: the feed of rides, or your crews. */
+function CrewHome() {
+  const seg = crewSegment.value;
+  return (
+    <Page title="Crew">
+      <div class="segmented" role="group" aria-label="Show">
+        <button class={seg === "feed" ? "seg active" : "seg"} aria-pressed={seg === "feed"} onClick={() => (crewSegment.value = "feed")}>Feed</button>
+        <button class={seg === "crews" ? "seg active" : "seg"} aria-pressed={seg === "crews"} onClick={() => (crewSegment.value = "crews")}>Crews</button>
+      </div>
+      {seg === "feed" ? <Feed /> : <CrewList />}
+    </Page>
+  );
+}
+
 function CrewList() {
   const [crews, setCrews] = useState<CrewSummary[] | null>(null);
   const [rides, setRides] = useState<GroupRideSummary[]>([]);
@@ -91,7 +106,7 @@ function CrewList() {
   useEffect(load, []);
 
   return (
-    <Page title="Crew">
+    <>
       {error && <div class="banner warn">{error}</div>}
       {rides.length > 0 && (
         <section class="stack-8">
@@ -143,7 +158,7 @@ function CrewList() {
         </label>
         <button class="btn outline">Join</button>
       </form>
-    </Page>
+    </>
   );
 }
 
@@ -169,7 +184,7 @@ function CrewPage({ id }: { id: string }) {
 
   return (
     <Page title={crew?.name ?? "Crew"}>
-      <button class="link-btn back-link" onClick={() => (crewView.value = { kind: "list" })}><Back size={16} /> All crews</button>
+      <button class="link-btn back-link" onClick={() => { crewSegment.value = "crews"; crewView.value = { kind: "list" }; }}><Back size={16} /> All crews</button>
       {error && <div class="banner warn">{error}</div>}
       {crew && (
         <>
@@ -235,7 +250,7 @@ function CrewPage({ id }: { id: string }) {
 
           <section class="stack-8">
             <h2 class="section-title">Shared rides</h2>
-            {shared.length === 0 && <p class="muted small">Rides are private. Share one from the Rides tab and your crew will see it here.</p>}
+            {shared.length === 0 && <p class="muted small">Rides are private. Share one with {crew.name} from the Rides tab and it shows here.</p>}
             <ul class="list">
               {shared.map((r) => (
                 <li key={r.id} class="list-card">

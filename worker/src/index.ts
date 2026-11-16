@@ -4,6 +4,10 @@ import { getConditions } from "./conditions.ts";
 import { AVATAR_AT, avatarUrl, registerAvatars } from "./avatars.ts";
 import { registerCrews } from "./crews.ts";
 import { searchPlaces } from "./search.ts";
+import { trimEnds } from "./polyline.ts";
+import {
+  deleteRideStatements, person, PERSON_COLUMNS, registerSocial, shareStatements, SOCIAL_COUNTS, viewer, VISIBLE_RIDES,
+} from "./social.ts";
 import {
   BadRequest, feedbackBody, inSingapore, jsonBody, meBody, rideBody, routeBody, visibilityBody,
 } from "./validate.ts";
@@ -100,12 +104,13 @@ async function identify(c: Ctx, next: Next) {
     let user = await db.prepare("SELECT id FROM users WHERE email = ? AND kind = 'account'").bind(email).first<{ id: string }>();
     if (!user) {
       const id = crypto.randomUUID();
-      // Start from the device's settings, if it had any.
+      // Start from the device's settings, if it had any. No display name until they choose one:
+      // the email's name part isn't something to show strangers.
       await db.prepare(
         `INSERT INTO users (id, kind, email, display_name, operator, cap_minutes, speed_kmh)
-         SELECT ?, 'account', ?, ?, COALESCE(d.operator, 'helloride'), COALESCE(d.cap_minutes, 30), COALESCE(d.speed_kmh, 13)
+         SELECT ?, 'account', ?, NULL, COALESCE(d.operator, 'helloride'), COALESCE(d.cap_minutes, 30), COALESCE(d.speed_kmh, 13)
            FROM (SELECT 1) LEFT JOIN users d ON d.id = ? AND d.kind = 'device'`,
-      ).bind(id, email, email.split("@")[0], device).run();
+      ).bind(id, email, device).run();
       user = { id };
     }
     if (device) await mergeDevice(db, device, user.id);
@@ -138,12 +143,27 @@ async function mergeDevice(db: D1Database, device: string, account: string) {
   ]);
 }
 
-for (const path of [
-  "/api/me", "/api/me/*", "/api/routes", "/api/routes/*", "/api/rides", "/api/rides/*", "/api/feedback", "/api/feedback/*",
-  "/api/crews", "/api/crews/*", "/api/group-rides", "/api/group-rides/*", "/api/avatars/*", "/api/crew-rides",
-]) {
-  app.use(path, identify);
-}
+/** The only API routes anyone may call without an identity. Everything else fails closed. */
+const PUBLIC_API = [/^\/api\/health$/, /^\/api\/search$/, /^\/api\/conditions$/, /^\/api\/share\/[^/]+$/];
+
+/**
+ * Routes that need a real account, not just a device id: friends can't find, invite or follow
+ * a device. Crews, group rides, the feed, follows, kudos, comments and per-ride sharing.
+ */
+const ACCOUNT_API = [
+  /^\/api\/(crews|group-rides)(\/|$)/, /^\/api\/crew-rides$/, /^\/api\/feed$/, /^\/api\/(follow|following|followers|comments)(\/|$)/,
+  /^\/api\/me\/follow(\/|$)/, /^\/api\/rides\/[^/]+\/(sharing|kudos|comments)$/,
+];
+
+app.use("/api/*", async (c, next) => {
+  const path = c.req.path;
+  if (PUBLIC_API.some((re) => re.test(path))) return next();
+  let known = false;
+  const refused = await identify(c, async () => { known = true; });
+  if (!known) return refused;
+  if (!c.var.account && ACCOUNT_API.some((re) => re.test(path))) return c.json({ error: "Sign in to ride with friends", signIn: true }, 401);
+  await next();
+});
 
 app.get("/api/me", async (c) => {
   const u = await c.env.DB.prepare(`SELECT operator, cap_minutes, speed_kmh, display_name, ${AVATAR_AT("users")} FROM users WHERE id = ?`)
@@ -164,6 +184,7 @@ app.put("/api/me", async (c) => {
 
 registerCrews(app);
 registerAvatars(app);
+registerSocial(app);
 
 function routeOut(r: Record<string, string | number>) {
   return {
@@ -242,24 +263,41 @@ function rideOut(r: Record<string, string | number>) {
     id: r.id, routeId: r.route_id ?? null, name: r.name, riddenAt: r.ridden_at, distanceM: r.distance_m,
     timeS: r.time_s, tierM: JSON.parse(r.tier_m as string), polyline: r.polyline, source: r.source, visibility: r.visibility,
     predictedS: r.predicted_s ?? null, stats: r.stats ? JSON.parse(r.stats as string) : null, hasTrack: !!r.has_track,
+    sharedCrewIds: JSON.parse(r.shared_crews as string) as string[], shareFollowers: !!r.share_followers,
   };
 }
 
 // Lists leave the (large) GPS track out; the detail endpoint sends it.
-const RIDE_LIST_COLUMNS = `id, route_id, name, ridden_at, distance_m, time_s, tier_m, polyline, source, visibility, predicted_s, stats,
-  track IS NOT NULL AS has_track`;
+const RIDE_LIST_COLUMNS = `r.id, r.route_id, r.name, r.ridden_at, r.distance_m, r.time_s, r.tier_m, r.polyline, r.source, r.visibility,
+  r.predicted_s, r.stats, r.track IS NOT NULL AS has_track, r.share_followers,
+  (SELECT json_group_array(crew_id) FROM ride_shares WHERE ride_id = r.id) AS shared_crews`;
 
 app.get("/api/rides", async (c) => {
-  const { results } = await c.env.DB.prepare(`SELECT ${RIDE_LIST_COLUMNS} FROM rides WHERE user_id = ? ORDER BY ridden_at DESC LIMIT 500`)
+  const { results } = await c.env.DB.prepare(`SELECT ${RIDE_LIST_COLUMNS} FROM rides r WHERE r.user_id = ? ORDER BY r.ridden_at DESC LIMIT 500`)
     .bind(c.var.userId).all<Record<string, string | number>>();
   return c.json({ rides: results.map(rideOut) });
 });
 
+/**
+ * One ride. The rider gets everything, GPS track included. Anyone else who can see it (crew or
+ * follower sharing, see social.ts) gets the trimmed line and stats, never the track, and nothing
+ * about who else it's shared with. Everyone else gets the same 404 as a ride that doesn't exist.
+ */
 app.get("/api/rides/:id", async (c) => {
-  const r = await c.env.DB.prepare(`SELECT ${RIDE_LIST_COLUMNS}, track FROM rides WHERE id = ? AND user_id = ?`)
-    .bind(c.req.param("id"), c.var.userId).first<Record<string, string | number>>();
+  const me = c.var.userId;
+  const r = await c.env.DB.prepare(
+    `SELECT ${RIDE_LIST_COLUMNS}, r.user_id, ${PERSON_COLUMNS}, ${SOCIAL_COUNTS} FROM rides r JOIN users u ON u.id = r.user_id
+      WHERE r.id = ? AND r.id IN (${VISIBLE_RIDES})`,
+  ).bind(me, c.req.param("id"), ...viewer(me)).first<Record<string, string | number>>();
   if (!r) return c.json({ error: "not found" }, 404);
-  return c.json({ ride: { ...rideOut(r), track: r.track ? JSON.parse(r.track as string) : null } });
+  const social = { rider: person(r), kudos: Number(r.kudos), kudoed: !!r.kudoed, comments: Number(r.comment_count) };
+  if (r.user_id === me) {
+    const t = await c.env.DB.prepare("SELECT track FROM rides WHERE id = ?").bind(r.id).first<{ track: string | null }>();
+    return c.json({ ride: { ...rideOut(r), ...social, mine: true, track: t?.track ? JSON.parse(t.track) : null } });
+  }
+  // Leave out anything about how it was recorded or who else sees it.
+  const { sharedCrewIds: _c, shareFollowers: _f, source: _s, visibility: _v, predictedS: _p, routeId: _r, ...out } = rideOut(r);
+  return c.json({ ride: { ...out, ...social, mine: false, hasTrack: false, polyline: trimEnds(r.polyline as string) } });
 });
 
 app.post("/api/rides", async (c) => {
@@ -269,20 +307,30 @@ app.post("/api/rides", async (c) => {
     `INSERT INTO rides (id, user_id, route_id, name, ridden_at, distance_m, time_s, tier_m, polyline, source, visibility, predicted_s, track, stats)
      VALUES (?, ?, (SELECT id FROM routes WHERE id = ? AND user_id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(id, c.var.userId, b.routeId, c.var.userId, b.name, b.riddenAt, b.distanceM, b.timeS, JSON.stringify(b.tierM),
-    b.polyline, b.source, b.visibility, b.predictedS, b.track, b.stats).run();
+    b.polyline, b.source, "private", b.predictedS, b.track, b.stats).run();
+  // "crew" at save time means every crew you're in, as before per-crew sharing.
+  if (b.visibility === "crew") await c.env.DB.batch(shareStatements(c.env.DB, id, c.var.userId, "all", null));
   return c.json({ id }, 201);
 });
 
+// The old all-or-nothing switch (kept for older app versions): "crew" shares with every crew you're
+// in, "private" un-shares from crews and followers. Per-crew choice is PUT /api/rides/:id/sharing.
 app.patch("/api/rides/:id", async (c) => {
   const visibility = visibilityBody(await body(c));
-  const res = await c.env.DB.prepare("UPDATE rides SET visibility = ? WHERE id = ? AND user_id = ?")
-    .bind(visibility, c.req.param("id"), c.var.userId).run();
-  return res.meta.changes ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);
+  const id = c.req.param("id"), me = c.var.userId;
+  const owned = await c.env.DB.prepare("SELECT id FROM rides WHERE id = ? AND user_id = ?").bind(id, me).first();
+  if (!owned) return c.json({ error: "not found" }, 404);
+  const db = c.env.DB;
+  await db.batch(visibility === "crew"
+    // Recorded as asked even with no crews yet: visibility is only a label, access comes from ride_shares.
+    ? [...shareStatements(db, id, me, "all", null), db.prepare("UPDATE rides SET visibility = 'crew' WHERE id = ? AND user_id = ?").bind(id, me)]
+    : shareStatements(db, id, me, [], false));
+  return c.json({ ok: true });
 });
 
 app.delete("/api/rides/:id", async (c) => {
-  const res = await c.env.DB.prepare("DELETE FROM rides WHERE id = ? AND user_id = ?").bind(c.req.param("id"), c.var.userId).run();
-  return res.meta.changes ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);
+  const res = await c.env.DB.batch(deleteRideStatements(c.env.DB, c.req.param("id"), c.var.userId));
+  return res[res.length - 1].meta.changes ? c.json({ ok: true }) : c.json({ error: "not found" }, 404);
 });
 
 // ------------------------------------------------------------------ segment feedback

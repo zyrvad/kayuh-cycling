@@ -1,4 +1,7 @@
-/** Profile pictures. Visible to you and the people you share a crew with. */
+/**
+ * Profile pictures. Visible to you, the people you share a crew with, and anyone with a follow
+ * between you either way (pending too, so you can see who's asking).
+ */
 import type { Hono } from "hono";
 import type { App, Ctx } from "./index.ts";
 import { avatarBody, jsonBody } from "./validate.ts";
@@ -33,13 +36,16 @@ export function registerAvatars(app: Hono<App>) {
 
   app.get("/api/avatars/:id", async (c) => {
     const id = c.req.param("id");
-    // Yours, or someone you ride with. Anyone else gets the same 404 as a missing picture.
+    // Yours, or someone you ride with or follow. Anyone else gets the same 404 as a missing picture.
+    const me = c.var.userId;
     const row = await c.env.DB.prepare(
       `SELECT a.mime, a.data FROM avatars a
         WHERE a.user_id = ? AND (a.user_id = ? OR EXISTS (
           SELECT 1 FROM crew_members mine JOIN crew_members theirs ON theirs.crew_id = mine.crew_id
-           WHERE mine.user_id = ? AND theirs.user_id = a.user_id))`,
-    ).bind(id, c.var.userId, c.var.userId).first<{ mime: string; data: string }>();
+           WHERE mine.user_id = ? AND theirs.user_id = a.user_id) OR EXISTS (
+          SELECT 1 FROM follows f
+           WHERE (f.follower_id = ? AND f.followee_id = a.user_id) OR (f.follower_id = a.user_id AND f.followee_id = ?)))`,
+    ).bind(id, me, me, me, me).first<{ mime: string; data: string }>();
     if (!row) return c.json({ error: "not found" }, 404);
     const bytes = Uint8Array.from(atob(row.data), (ch) => ch.charCodeAt(0));
     return new Response(bytes, {

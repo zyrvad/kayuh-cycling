@@ -71,8 +71,36 @@ export interface Ride {
   /** Summary of a recorded ride (null for older or planned-only rides). */
   stats: RideStats | null;
   hasTrack: boolean;
+  /** The crews it's shared with, and whether your followers see it (your own rides only). */
+  sharedCrewIds: string[];
+  shareFollowers: boolean;
 }
-export interface RideDetail extends Ride { track: TrackJson | null }
+export interface Person { id: string; name: string; avatar: string | null }
+/** Fields only the rider gets in RideDetail. */
+type OwnerOnly = "sharedCrewIds" | "shareFollowers" | "source" | "visibility" | "predictedS" | "routeId";
+/**
+ * One ride, yours or someone else's you're allowed to see. Others' rides come without the GPS
+ * track, with the line trimmed 200 m at each end, and without how it was recorded or who else sees it.
+ */
+export interface RideDetail extends Omit<Ride, OwnerOnly>, Partial<Pick<Ride, OwnerOnly>> {
+  track?: TrackJson | null; mine: boolean; rider: Person; kudos: number; kudoed: boolean; comments: number;
+}
+export interface RideSharing { crewIds: string[]; followers: boolean }
+export interface FeedItem {
+  id: string; name: string; riddenAt: string; distanceM: number; timeS: number; tierM: number[]; polyline: string;
+  stats: RideStats | null; mine: boolean; rider: Person; kudos: number; kudoed: boolean; comments: number;
+  /** Your crews it's shared with. */
+  crews: { id: string; name: string }[];
+}
+export interface RideComment { id: string; body: string; createdAt: string; author: Person; mine: boolean; canDelete: boolean }
+export interface FollowInfo {
+  code: string; privateAccount: boolean;
+  followers: Person[]; following: Person[];
+  /** People asking to follow you, and requests you've sent that are still waiting. */
+  requests: Person[]; outgoing: Person[];
+  /** Crewmates you don't follow yet. */
+  suggestions: Person[];
+}
 export interface Me {
   id: string | null; email: string | null; displayName: string | null;
   operator: "helloride" | "anywheel" | "own"; capMinutes: number; speedKmh: number; signedIn: boolean;
@@ -147,9 +175,30 @@ export const api = {
   rides: () => req<{ rides: Ride[] }>("GET", "/api/rides").then((r) => r.rides),
   ride: (id: string) => req<{ ride: RideDetail }>("GET", `/api/rides/${id}`).then((r) => r.ride),
   crewFeed: () => req<{ rides: CrewRide[] }>("GET", "/api/crew-rides").then((r) => r.rides),
-  logRide: (r: Omit<Ride, "id" | "visibility" | "routeId" | "predictedS" | "stats" | "hasTrack"> & {
+  logRide: (r: Omit<Ride, "id" | "visibility" | "routeId" | "predictedS" | "stats" | "hasTrack" | "sharedCrewIds" | "shareFollowers"> & {
     routeId?: string | null; predictedS?: number | null; track?: TrackJson | null; stats?: RideStats | null;
   }) => req<{ id: string }>("POST", "/api/rides", r),
   setRideVisibility: (id: string, visibility: Ride["visibility"]) => req("PATCH", `/api/rides/${id}`, { visibility }),
   deleteRide: (id: string) => req("DELETE", `/api/rides/${id}`),
+  rideSharing: (id: string) => req<RideSharing>("GET", `/api/rides/${id}/sharing`),
+  setRideSharing: (id: string, s: RideSharing) => req<RideSharing>("PUT", `/api/rides/${id}/sharing`, s),
+
+  feed: (before?: string | null, limit = 20) =>
+    req<{ items: FeedItem[]; next: string | null }>("GET", `/api/feed?limit=${limit}${before ? `&before=${encodeURIComponent(before)}` : ""}`),
+  /** `kudos` is missing when you took yours back from a ride you can no longer see. */
+  kudos: (id: string, on: boolean) => req<{ kudos?: number; kudoed: boolean }>(on ? "POST" : "DELETE", `/api/rides/${id}/kudos`),
+  comments: (id: string) => req<{ comments: RideComment[] }>("GET", `/api/rides/${id}/comments`).then((r) => r.comments),
+  addComment: (id: string, body: string) => req<{ comment: RideComment }>("POST", `/api/rides/${id}/comments`, { body }).then((r) => r.comment),
+  deleteComment: (id: string) => req("DELETE", `/api/comments/${id}`),
+
+  followInfo: () => req<FollowInfo>("GET", "/api/me/follow"),
+  setPrivateAccount: (privateAccount: boolean) => req<{ privateAccount: boolean }>("PUT", "/api/me/follow", { privateAccount }),
+  newFollowCode: () => req<{ code: string }>("POST", "/api/me/follow/code"),
+  /** By follow-link code, or by id for a crewmate. */
+  follow: (who: { code: string } | { userId: string }) =>
+    req<{ status: "pending" | "accepted"; user: { id: string; name: string } }>("POST", "/api/follow", who),
+  acceptFollower: (userId: string) => req("POST", `/api/follow/requests/${userId}/accept`),
+  declineFollower: (userId: string) => req("DELETE", `/api/follow/requests/${userId}`),
+  unfollow: (userId: string) => req("DELETE", `/api/following/${userId}`),
+  removeFollower: (userId: string) => req("DELETE", `/api/followers/${userId}`),
 };

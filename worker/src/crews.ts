@@ -1,8 +1,9 @@
 /** Crews (friend groups joined by invite link) and the group rides they plan together. */
-import type { Hono, Next } from "hono";
+import type { Hono } from "hono";
 import type { App, Ctx } from "./index.ts";
 import { AVATAR_AT, avatarUrl } from "./avatars.ts";
 import { trimEnds } from "./polyline.ts";
+import { leaveCrewStatements } from "./social.ts";
 import { crewNameBody, crewRouteBody, groupRideBody, joinBody, jsonBody, rsvpBody } from "./validate.ts";
 
 const body = (c: Ctx) => jsonBody(c.req);
@@ -16,11 +17,6 @@ function inviteCode(): string {
   return Array.from(bytes, (b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join("");
 }
 
-/** Crews need a real account: a device id can't be invited or recognised by friends. */
-async function requireAccount(c: Ctx, next: Next) {
-  if (!c.var.account) return c.json({ error: "Sign in to use crews", signIn: true }, 401);
-  await next();
-}
 
 async function membership(c: Ctx, crewId: string): Promise<"owner" | "member" | null> {
   const m = await c.env.DB.prepare("SELECT role FROM crew_members WHERE crew_id = ? AND user_id = ?")
@@ -63,7 +59,7 @@ function ics(r: Row, url: string): string {
 }
 
 export function registerCrews(app: Hono<App>) {
-  for (const p of ["/api/crews", "/api/crews/*", "/api/group-rides", "/api/group-rides/*", "/api/crew-rides"]) app.use(p, requireAccount);
+  // Every route here needs an account (ACCOUNT_API in index.ts).
 
   // ------------------------------------------------------------------ crews
 
@@ -144,6 +140,7 @@ export function registerCrews(app: Hono<App>) {
     await db.batch([
       db.prepare("DELETE FROM crew_members WHERE crew_id = ? AND user_id = ?").bind(id, c.var.userId),
       db.prepare("DELETE FROM crew_routes WHERE crew_id = ? AND shared_by = ?").bind(id, c.var.userId),
+      ...leaveCrewStatements(db, id, c.var.userId),
     ]);
     const next = await db.prepare("SELECT user_id FROM crew_members WHERE crew_id = ? ORDER BY joined_at, rowid LIMIT 1").bind(id).first<{ user_id: string }>();
     if (!next) {
@@ -151,6 +148,7 @@ export function registerCrews(app: Hono<App>) {
         db.prepare("DELETE FROM rsvps WHERE ride_id IN (SELECT id FROM group_rides WHERE crew_id = ?)").bind(id),
         db.prepare("DELETE FROM group_rides WHERE crew_id = ?").bind(id),
         db.prepare("DELETE FROM crew_routes WHERE crew_id = ?").bind(id),
+        db.prepare("DELETE FROM ride_shares WHERE crew_id = ?").bind(id),
         db.prepare("DELETE FROM crews WHERE id = ?").bind(id),
       ]);
     } else if (role === "owner") {
@@ -159,15 +157,15 @@ export function registerCrews(app: Hono<App>) {
     return c.json({ ok: true });
   });
 
-  /** Rides your crewmates chose to share with the crew (rides are private by default). */
+  /** Rides crewmates chose to share with this crew (rides are private by default; see social.ts). */
   app.get("/api/crews/:id/rides", async (c) => {
     const id = c.req.param("id");
     if (!(await membership(c, id))) return notFound(c);
     const { results } = await c.env.DB.prepare(
       `SELECT r.id, r.name, r.ridden_at, r.distance_m, r.time_s, r.tier_m, r.polyline, u.display_name, u.email, u.id AS user_id
-         FROM rides r JOIN crew_members m ON m.user_id = r.user_id AND m.crew_id = ?
+         FROM ride_shares s JOIN rides r ON r.id = s.ride_id
          JOIN users u ON u.id = r.user_id
-        WHERE r.visibility = 'crew' ORDER BY r.ridden_at DESC LIMIT 100`,
+        WHERE s.crew_id = ? ORDER BY r.ridden_at DESC LIMIT 100`,
     ).bind(id).all<Row>();
     return c.json({
       rides: results.map((r) => ({
@@ -184,8 +182,8 @@ export function registerCrews(app: Hono<App>) {
     const { results } = await c.env.DB.prepare(
       `SELECT DISTINCT r.id, r.name, r.ridden_at, r.distance_m, r.time_s, r.tier_m, r.polyline, r.stats, u.display_name, u.email, u.id AS user_id,
               ${AVATAR_AT("u")}
-         FROM crew_members mine JOIN crew_members theirs ON theirs.crew_id = mine.crew_id
-         JOIN rides r ON r.user_id = theirs.user_id AND r.visibility = 'crew'
+         FROM crew_members mine JOIN ride_shares s ON s.crew_id = mine.crew_id
+         JOIN rides r ON r.id = s.ride_id
          JOIN users u ON u.id = r.user_id
         WHERE mine.user_id = ? AND r.user_id != ? ORDER BY r.ridden_at DESC LIMIT 100`,
     ).bind(c.var.userId, c.var.userId).all<Row>();

@@ -5,6 +5,7 @@ import {
 } from "../state.ts";
 import { duration, km, OPERATOR_NAMES } from "../util.ts";
 import { Avatar, Page, squarePhoto, TabBar, TierBar } from "./common.tsx";
+import { showOnboarding } from "./Onboarding.tsx";
 import { Share, Trash } from "./Icons.tsx";
 import { ShareSheet } from "./ShareSheet.tsx";
 
@@ -117,6 +118,10 @@ export function MeTab() {
         <section class="group">
           <h2>Account</h2>
           <Account />
+        </section>
+        <section class="group">
+          <h2>Intro</h2>
+          <button class="btn outline" onClick={() => (showOnboarding.value = true)}>Replay intro</button>
         </section>
         <section class="group">
           <h2>Data</h2>

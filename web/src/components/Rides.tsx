@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { LonLat } from "@kayuh/router";
-import { api, type CrewRide, type Ride, type RideDetail } from "../api.ts";
+import { api, type CrewRide, type CrewSummary, type Ride, type RideComment, type RideDetail } from "../api.ts";
 import type { MapView } from "../map.ts";
 import { rideTitle } from "../places.ts";
-import { me, rideDetail, showToast } from "../state.ts";
+import { closeRide, me, refreshMe, rideDetail, screen, showToast } from "../state.ts";
 import { analyse, BEST_EFFORTS, BEST_LABEL, decodeTrack, speedColor, SPEED_LEGEND, type Analysis, type BestKey, type RideStats, type Sample } from "../track.ts";
 import { clock, decodePolyline, duration, km, TIER_COLORS, TIER_LABELS } from "../util.ts";
 import { Avatar, Page, Sheet, TabBar, TierBar } from "./common.tsx";
-import { Back, Trash } from "./Icons.tsx";
+import { Back, Close, Share, Trash } from "./Icons.tsx";
 import { openSaved } from "./Tabs.tsx";
+import "./feed.css";
 
 const dateLabel = (iso: string) => new Date(iso).toLocaleDateString("en-SG", { weekday: "short", day: "numeric", month: "short" });
 const partOfDay = (iso: string) => {
@@ -17,7 +18,7 @@ const partOfDay = (iso: string) => {
 };
 
 /** "Bukit Panjang → Springleaf", with generic labels like "My location" replaced by a landmark. */
-function useTitle(name: string, polyline: string): string {
+export function useTitle(name: string, polyline: string): string {
   const [title, setTitle] = useState(name);
   useEffect(() => {
     const pts = decodePolyline(polyline);
@@ -34,29 +35,23 @@ export function RidesTab({ map }: { map: MapView | null }) {
   const [view, setView] = useState<"mine" | "crew">("mine");
   const [rides, setRides] = useState<Ride[] | null>(null);
   const [crew, setCrew] = useState<CrewRide[] | null>(null);
+  const [picking, setPicking] = useState<Ride | null>(null);
   const [error, setError] = useState<string | null>(null);
   const reload = () => api.rides().then((r) => { setRides(r); setError(null); }).catch((e) => setError(e.message));
   useEffect(() => { reload(); }, []);
   const open = rideDetail.value;
   useEffect(() => {
-    if ((view !== "crew" && !open?.crew) || crew) return;
+    if (view !== "crew" || crew) return;
     api.crewFeed().then(setCrew).catch((e) => {
       setCrew([]);
       if (e.status !== 401) setError(e.message);
     });
-  }, [view, open?.crew]);
+  }, [view]);
 
-  if (open) {
-    const crewRide = open.crew ? crew?.find((r) => r.id === open.id) : undefined;
-    return <RideDetailPage key={open.id} id={open.id} crew={!!open.crew} crewRide={crewRide} crewLoaded={!!crew} all={rides ?? []} map={map} onChange={reload} />;
-  }
+  if (open) return <RideDetailPage key={open.id} id={open.id} all={rides ?? []} map={map} onChange={reload} />;
 
   const total = (rides ?? []).reduce((a, r) => a + r.distanceM, 0);
   const pcn = (rides ?? []).reduce((a, r) => a + r.tierM[0], 0);
-  const toggle = async (r: Ride) => {
-    await api.setRideVisibility(r.id, r.visibility === "private" ? "crew" : "private").catch((e) => showToast(e.message));
-    reload();
-  };
   return (
     <>
       <Page title="Rides">
@@ -72,13 +67,14 @@ export function RidesTab({ map }: { map: MapView | null }) {
               <div><span class="big">{km(pcn)}</span><small>km on park connectors</small></div>
               <div><span class="big">{rides?.length ?? 0}</span><small>rides</small></div>
             </div>
-            <p class="muted small">Rides are private. Tap <strong>Private</strong> on one to share it with your crews: the first and last 200 m always stay hidden.</p>
+            <p class="muted small">Rides are private. Tap <strong>Private</strong> on one to choose which crews, or your followers, see it: the first and last 200 m always stay hidden.</p>
             {rides?.length === 0 && <p class="muted">Rides you start from a planned route show up here, with the full map and stats.</p>}
             <ul class="list">
               {rides?.map((r) => (
                 <li key={r.id}>
                   <RideCard ride={r} onOpen={() => (rideDetail.value = { id: r.id })}
-                    action={<button class="pill-btn" aria-pressed={r.visibility === "crew"} onClick={(e) => { e.stopPropagation(); toggle(r); }}>{r.visibility === "crew" ? "Crew" : "Private"}</button>} />
+                    action={<button class="pill-btn" aria-pressed={isShared(r)} aria-label={`Who sees ${r.name}`}
+                      onClick={(e) => { e.stopPropagation(); setPicking(r); }}>{isShared(r) ? "Shared" : "Private"}</button>} />
                 </li>
               ))}
             </ul>
@@ -96,7 +92,95 @@ export function RidesTab({ map }: { map: MapView | null }) {
         )}
       </Page>
       <TabBar />
+      {picking && <SharePicker rideId={picking.id} onClose={() => setPicking(null)} onSaved={() => { setPicking(null); reload(); }} />}
     </>
+  );
+}
+
+const isShared = (r: { sharedCrewIds?: string[]; shareFollowers?: boolean }) => !!(r.sharedCrewIds?.length || r.shareFollowers);
+
+/** Who sees this ride: "Private", "Kakis", "2 crews and followers"... */
+function sharedLabel(r: { sharedCrewIds?: string[]; shareFollowers?: boolean }, crews: CrewSummary[] | null): string {
+  const ids = r.sharedCrewIds ?? [];
+  const crewPart = ids.length === 1 ? (crews?.find((c) => c.id === ids[0])?.name ?? "1 crew") : ids.length ? `${ids.length} crews` : "";
+  const parts = [crewPart, r.shareFollowers ? "followers" : ""].filter(Boolean);
+  return parts.length ? `Shared with ${parts.join(" and ")}` : "Private";
+}
+
+/**
+ * Choose who sees a ride: any of your crews, and/or the people who follow you. Others never get
+ * the GPS track, and the first and last 200 m of the line are always cut off.
+ */
+export function SharePicker({ rideId, onClose, onSaved }: { rideId: string; onClose: () => void; onSaved: (s: { crewIds: string[]; followers: boolean }) => void }) {
+  const [crews, setCrews] = useState<CrewSummary[] | null>(null);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [followers, setFollowers] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const signedIn = me.value?.signedIn;
+
+  useEffect(() => { if (!me.value) refreshMe(); }, []);
+  useEffect(() => {
+    if (!signedIn) return;
+    api.crews().then(setCrews).catch(() => setCrews([]));
+    api.rideSharing(rideId).then((s) => { setPicked(new Set(s.crewIds)); setFollowers(s.followers); setLoaded(true); })
+      .catch((e) => showToast(e.message));
+  }, [rideId, signedIn]);
+
+  const toggle = (id: string) => {
+    const next = new Set(picked);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setPicked(next);
+  };
+  const save = async () => {
+    setBusy(true);
+    try {
+      const s = await api.setRideSharing(rideId, { crewIds: [...picked], followers });
+      showToast(s.crewIds.length || s.followers ? "Sharing updated" : "Ride is private");
+      onSaved(s);
+    } catch (e) {
+      showToast((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div class="sheet-full" role="dialog" aria-label="Who sees this ride">
+      <div class="search-head">
+        <strong class="lg grow" style={{ alignSelf: "center" }}>Who sees this ride</strong>
+        <button class="icon-btn" aria-label="Close" onClick={onClose}><Close /></button>
+      </div>
+      <div class="form-body">
+        {signedIn === false && (
+          <div class="banner info">Sign in to share rides with friends. <button class="link-btn" onClick={() => { onClose(); screen.value = "crew"; }}>Open Crew</button></div>
+        )}
+        {signedIn && (
+          <>
+            <section class="stack-8">
+              <h2 class="section-title">Your crews</h2>
+              {crews?.length === 0 && <p class="muted small">You're not in a crew yet. Start or join one from the Crew tab.</p>}
+              <ul class="list">
+                {crews?.map((c) => (
+                  <li key={c.id}>
+                    <label class="list-card share-pick">
+                      <input type="checkbox" checked={picked.has(c.id)} onChange={() => toggle(c.id)} />
+                      <span class="list-main"><strong>{c.name}</strong><span class="muted small">{c.members} member{c.members === 1 ? "" : "s"}</span></span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </section>
+            <label class="list-card share-pick">
+              <input type="checkbox" checked={followers} onChange={() => setFollowers(!followers)} />
+              <span class="list-main"><strong>My followers</strong><span class="muted small">People you've let follow you, in their feed.</span></span>
+            </label>
+            <p class="muted small">They see the line, distance and times, never your GPS track. The first and last 200 m always stay hidden.</p>
+            <button class="btn primary" disabled={!loaded || busy} onClick={save}>{busy ? "Saving…" : "Save"}</button>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -127,7 +211,7 @@ function RideCard({ ride, rider, avatar, onOpen, action }: {
 }
 
 /** A small drawing of the ride's shape (no map tiles: dozens of these must stay cheap). */
-function MiniMap({ polyline, size = 76 }: { polyline: string; size?: number }) {
+export function MiniMap({ polyline, size = 76, class: cls = "" }: { polyline: string; size?: number; class?: string }) {
   const d = useMemo(() => {
     const pts = decodePolyline(polyline);
     if (pts.length < 2) return null;
@@ -142,7 +226,7 @@ function MiniMap({ polyline, size = 76 }: { polyline: string; size?: number }) {
     return { path: P.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(""), a: P[0], b: P[P.length - 1] };
   }, [polyline, size]);
   return (
-    <svg class="minimap" width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+    <svg class={`minimap ${cls}`} width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
       {d && <>
         <path d={d.path} fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
         <path d={d.path} fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
@@ -155,20 +239,18 @@ function MiniMap({ polyline, size = 76 }: { polyline: string; size?: number }) {
 
 // ------------------------------------------------------------------ detail
 
-type Shown = (Ride | CrewRide) & { track?: RideDetail["track"] };
-
-function RideDetailPage({ id, crew, crewRide, crewLoaded, all, map, onChange }: {
-  id: string; crew: boolean; crewRide?: CrewRide; crewLoaded: boolean; all: Ride[]; map: MapView | null; onChange: () => void;
-}) {
-  const [ride, setRide] = useState<Shown | null>(crewRide ?? null);
+function RideDetailPage({ id, all, map, onChange }: { id: string; all: Ride[]; map: MapView | null; onChange: () => void }) {
+  const [ride, setRide] = useState<RideDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    if (crewRide) setRide(crewRide);
-    else if (crew && crewLoaded) setError("This ride isn't shared with you any more.");
-  }, [crewRide, crewLoaded]);
   const [colour, setColour] = useState<"speed" | "path">("speed");
   const [cursor, setCursor] = useState<number | null>(null);
-  useEffect(() => { if (!crew) api.ride(id).then(setRide).catch((e) => setError(e.message)); }, [id]);
+  const [picking, setPicking] = useState(false);
+  const [crews, setCrews] = useState<CrewSummary[] | null>(null);
+  // Yours or someone else's: the server decides what you may see (others' rides come without the track).
+  useEffect(() => {
+    api.ride(id).then(setRide).catch((e) => setError(e.status === 404 ? "This ride isn't shared with you any more." : e.message));
+  }, [id]);
+  useEffect(() => { if (ride?.mine && me.value?.signedIn) api.crews().then(setCrews).catch(() => {}); }, [ride?.mine]);
 
   const samples: Sample[] | null = useMemo(() => (ride?.track ? decodeTrack(ride.track) : null), [ride]);
   const a: Analysis | null = useMemo(() => (samples && samples.length > 1 ? analyse(samples, ride?.track?.L) : null), [samples]);
@@ -200,14 +282,14 @@ function RideDetailPage({ id, crew, crewRide, crewLoaded, all, map, onChange }: 
   }, [cursor]);
 
   const st: RideStats | null | undefined = a ?? ride?.stats;
-  const mine = !crew;
-  const sameRoute = mine && ride && "routeId" in ride && ride.routeId
-    ? all.filter((r) => r.routeId === (ride as Ride).routeId).sort((x, y) => (x.stats?.movingS ?? x.timeS) - (y.stats?.movingS ?? y.timeS))
+  const mine = !!ride?.mine;
+  const sameRoute = mine && ride?.routeId
+    ? all.filter((r) => r.routeId === ride.routeId).sort((x, y) => (x.stats?.movingS ?? x.timeS) - (y.stats?.movingS ?? y.timeS))
     : [];
 
   return (
     <>
-      <button class="icon-btn raised detail-back" aria-label="Back to rides" onClick={() => (rideDetail.value = null)}><Back /></button>
+      <button class="icon-btn raised detail-back" aria-label="Back" onClick={closeRide}><Back /></button>
       {a && (
         <div class="segmented detail-colour" role="group" aria-label="Colour the line by">
           <button class={colour === "speed" ? "seg active" : "seg"} aria-pressed={colour === "speed"} onClick={() => setColour("speed")}>Speed</button>
@@ -220,7 +302,7 @@ function RideDetailPage({ id, crew, crewRide, crewLoaded, all, map, onChange }: 
         {ride && (
           <>
             <div class="stack-2">
-              {crewRide && <span class="row gap-6 small muted"><Avatar name={crewRide.rider} url={crewRide.avatar} class="sm" />{crewRide.rider}</span>}
+              {!mine && <span class="row gap-6 small muted"><Avatar name={ride.rider.name} url={ride.rider.avatar} class="sm" />{ride.rider.name}</span>}
               <strong class="detail-title">{title}</strong>
               <span class="muted">{dateLabel(ride.riddenAt)} · {new Date(ride.riddenAt).toLocaleTimeString("en-SG", { hour: "numeric", minute: "2-digit" })}</span>
             </div>
@@ -238,7 +320,7 @@ function RideDetailPage({ id, crew, crewRide, crewLoaded, all, map, onChange }: 
               {st?.elevGainM !== undefined && <Stat label="Climbing" value={String(st.elevGainM)} unit="m" />}
               <Stat label="Elapsed" value={duration(st?.elapsedS ?? ride.timeS)} />
               {st && <Stat label="Stops" value={String(st.stops)} unit={st.stoppedS >= 60 ? `· ${duration(st.stoppedS)}` : ""} />}
-              {"predictedS" in ride && ride.predictedS ? <Stat label="vs Kayuh's estimate" value={vsEstimate(st?.movingS ?? ride.timeS, ride.predictedS)} /> : null}
+              {ride.predictedS ? <Stat label="vs Kayuh's estimate" value={vsEstimate(st?.movingS ?? ride.timeS, ride.predictedS)} /> : null}
             </div>
             <TierBar tierM={ride.tierM} labels />
 
@@ -337,17 +419,18 @@ function RideDetailPage({ id, crew, crewRide, crewLoaded, all, map, onChange }: 
 
             {!samples && mine && <p class="muted small">This ride was saved before Kayuh recorded GPS tracks, so it shows the planned line and no speed breakdown.</p>}
 
+            <section class="social-row">
+              <KudosButton id={ride.id} kudos={ride.kudos} kudoed={ride.kudoed} mine={mine} />
+              <span class="muted small">{ride.comments} comment{ride.comments === 1 ? "" : "s"}</span>
+            </section>
+            {(!mine || isShared(ride) || ride.comments > 0) && <Comments rideId={ride.id} onCount={(n) => setRide({ ...ride, comments: n })} />}
+
             {mine && (
               <div class="detail-actions">
-                <button class="btn outline grow" onClick={async () => {
-                  const r = ride as Ride;
-                  await api.setRideVisibility(r.id, r.visibility === "private" ? "crew" : "private").catch((e) => showToast(e.message));
-                  setRide({ ...r, visibility: r.visibility === "private" ? "crew" : "private" });
-                  onChange();
-                }}>{(ride as Ride).visibility === "crew" ? "Shared with crews · make private" : "Share with my crews"}</button>
-                {(ride as Ride).routeId && (
+                <button class="btn outline grow" onClick={() => setPicking(true)}><Share size={18} /> {sharedLabel(ride, crews)} · Share…</button>
+                {ride.routeId && (
                   <button class="btn primary grow" onClick={async () => {
-                    const saved = (await api.routes().catch(() => [])).find((x) => x.id === (ride as Ride).routeId);
+                    const saved = (await api.routes().catch(() => [])).find((x) => x.id === ride.routeId);
                     if (saved) { rideDetail.value = null; openSaved(saved); } else showToast("That saved route was deleted");
                   }}>Ride it again</button>
                 )}
@@ -362,7 +445,92 @@ function RideDetailPage({ id, crew, crewRide, crewLoaded, all, map, onChange }: 
           </>
         )}
       </Sheet>
+      {picking && ride && (
+        <SharePicker rideId={ride.id} onClose={() => setPicking(false)} onSaved={(s) => {
+          setPicking(false);
+          setRide({ ...ride, sharedCrewIds: s.crewIds, shareFollowers: s.followers, visibility: s.crewIds.length || s.followers ? "crew" : "private" });
+          onChange();
+        }} />
+      )}
     </>
+  );
+}
+
+const Clap = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M7 11V5.5a1.5 1.5 0 013 0V10M10 9.5v-6a1.5 1.5 0 013 0V10M13 6.5a1.5 1.5 0 013 0V12M16 9.5a1.5 1.5 0 013 0V15a6 6 0 01-6 6h-1.5a6 6 0 01-4.6-2.2L4 15.5a1.6 1.6 0 012.4-2.1L8 15" />
+  </svg>
+);
+
+/** Kudos with a count. Tapping updates at once and settles on what the server says. Your own rides show the count only. */
+export function KudosButton({ id, kudos, kudoed, mine }: { id: string; kudos: number; kudoed: boolean; mine: boolean }) {
+  const [s, setS] = useState({ kudos, kudoed });
+  useEffect(() => setS({ kudos, kudoed }), [id, kudos, kudoed]);
+  if (mine) return <span class="kudos-btn static" aria-label={`${s.kudos} kudos`}><Clap /> {s.kudos}</span>;
+  const toggle = async (e: Event) => {
+    e.stopPropagation();
+    const prev = s, on = !s.kudoed;
+    setS({ kudos: s.kudos + (on ? 1 : -1), kudoed: on });
+    try {
+      const r = await api.kudos(id, on);
+      setS({ kudos: r.kudos ?? Math.max(0, prev.kudos - 1), kudoed: r.kudoed });
+    } catch (err) {
+      setS(prev);
+      showToast((err as Error).message);
+    }
+  };
+  return (
+    <button class={s.kudoed ? "kudos-btn on" : "kudos-btn"} aria-pressed={s.kudoed} aria-label={`Give kudos (${s.kudos})`} onClick={toggle}>
+      <Clap /> {s.kudos}
+    </button>
+  );
+}
+
+function Comments({ rideId, onCount }: { rideId: string; onCount: (n: number) => void }) {
+  const [list, setList] = useState<RideComment[] | null>(null);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api.comments(rideId).then(setList).catch(() => setList([])); }, [rideId]);
+  const update = (next: RideComment[]) => { setList(next); onCount(next.length); };
+  if (me.value && !me.value.signedIn) return null;
+  return (
+    <section class="stack-8">
+      <h2 class="section-title">Comments</h2>
+      {list?.length === 0 && <p class="muted small">No comments yet.</p>}
+      <ul class="comment-list">
+        {list?.map((k) => (
+          <li key={k.id}>
+            <Avatar name={k.author.name} url={k.author.avatar} class="sm" />
+            <div class="comment-body">
+              <span class="small"><b>{k.mine ? "You" : k.author.name}</b> <span class="muted">{dateLabel(k.createdAt)}</span></span>
+              <p>{k.body}</p>
+            </div>
+            {k.canDelete && (
+              <button class="mini-btn" aria-label="Delete comment" onClick={async () => {
+                if (!confirm("Delete this comment?")) return;
+                try {
+                  await api.deleteComment(k.id);
+                  update(list.filter((x) => x.id !== k.id));
+                } catch (e) { showToast((e as Error).message); }
+              }}><Trash /></button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <form class="comment-form" onSubmit={async (e) => {
+        e.preventDefault();
+        if (!text.trim()) return;
+        setBusy(true);
+        try {
+          const k = await api.addComment(rideId, text.trim());
+          update([...(list ?? []), k]);
+          setText("");
+        } catch (err) { showToast((err as Error).message); } finally { setBusy(false); }
+      }}>
+        <input maxLength={500} value={text} placeholder="Add a comment" aria-label="Add a comment" onInput={(e) => setText((e.target as HTMLInputElement).value)} />
+        <button class="btn primary" disabled={busy || !text.trim()}>Post</button>
+      </form>
+    </section>
   );
 }
 

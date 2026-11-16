@@ -102,8 +102,10 @@ export function routeBody(v: unknown) {
 
 export function rideBody(v: unknown) {
   const o = obj(v);
-  const riddenAt = str(o, "riddenAt", 40);
-  if (Number.isNaN(Date.parse(riddenAt))) throw new BadRequest("riddenAt: expected an ISO date");
+  const at = str(o, "riddenAt", 40);
+  if (Number.isNaN(Date.parse(at))) throw new BadRequest("riddenAt: expected an ISO date");
+  // Stored as ISO UTC so sorting the text sorts by time (the feed's paging relies on it).
+  const riddenAt = new Date(at).toISOString();
   return {
     name: str(o, "name", 80),
     routeId: str(o, "routeId", 40, true) || null,
@@ -249,4 +251,56 @@ export function avatarBody(v: unknown) {
   if (!MAGIC[mime].every((b, i) => head.charCodeAt(i) === b)) throw new BadRequest("image: not a valid " + mime.slice(6));
   if (mime === "image/webp" && head.slice(8, 12) !== "WEBP") throw new BadRequest("image: not a valid webp");
   return { mime, data };
+}
+
+// ------------------------------------------------------------------ social
+
+export const isId = (v: unknown): v is string => typeof v === "string" && ID.test(v);
+
+/** Who a ride is shared with: some of your crews, and/or your followers. */
+export function sharingBody(v: unknown) {
+  const o = obj(v);
+  const ids = o.crewIds;
+  if (!Array.isArray(ids) || ids.length > 20 || !ids.every(isId)) throw new BadRequest("crewIds: expected up to 20 crew ids");
+  if (typeof o.followers !== "boolean") throw new BadRequest("followers: expected true or false");
+  return { crewIds: [...new Set(ids.map((s) => s.toLowerCase()))], followers: o.followers };
+}
+
+/** Follow someone by their follow-link code, or (for a crewmate) by their id. */
+export function followBody(v: unknown): { code: string } | { userId: string } {
+  const o = obj(v);
+  if (o.userId !== undefined) {
+    if (!isId(o.userId)) throw new BadRequest("userId: expected a user id");
+    return { userId: o.userId.toLowerCase() };
+  }
+  const code = str(o, "code", 20).toUpperCase();
+  if (!/^[A-Z0-9]{6,20}$/.test(code)) throw new BadRequest("code: expected a follow code");
+  return { code };
+}
+
+export function privateAccountBody(v: unknown) {
+  const p = obj(v).privateAccount;
+  if (typeof p !== "boolean") throw new BadRequest("privateAccount: expected true or false");
+  return p;
+}
+
+export function commentBody(v: unknown) {
+  const b = obj(v).body;
+  const t = typeof b === "string" ? b.trim() : "";
+  if (!t || t.length > 500) throw new BadRequest("body: expected 1-500 characters");
+  return t;
+}
+
+/** Feed paging: `before` is the `next` value of the previous page (an ISO date, optionally "|<ride id>"). */
+export function feedQuery(before: string | undefined, limit: string | undefined) {
+  let at: string | null = null, id = "";
+  if (before) {
+    const [a, b = ""] = before.split("|");
+    if (a.length > 40 || Number.isNaN(Date.parse(a)) || (b && !ID.test(b))) throw new BadRequest("before: expected a date from the previous page");
+    at = new Date(a).toISOString();
+    id = b.toLowerCase();
+  }
+  const n = limit === undefined ? 20 : Number(limit);
+  if (!Number.isInteger(n) || n < 1 || n > 50) throw new BadRequest("limit: expected 1-50");
+  return { at, id, limit: n };
 }

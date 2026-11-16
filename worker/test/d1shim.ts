@@ -23,10 +23,17 @@ class Stmt {
   }
 }
 
-export function testDb(): D1Database {
+/**
+ * A fresh database with every migration applied. `seed` runs raw SQL just before the migration
+ * named `seedBefore` (e.g. "0007"), to test how a migration treats existing data.
+ */
+export function testDb(opts: { seedBefore?: string; seed?: (db: DatabaseSync) => void } = {}): D1Database {
   const db = new DatabaseSync(":memory:");
   const dir = new URL("../migrations/", import.meta.url);
-  for (const f of readdirSync(dir).sort()) db.exec(readFileSync(new URL(f, dir), "utf8"));
+  for (const f of readdirSync(dir).sort()) {
+    if (opts.seed && opts.seedBefore && f.startsWith(opts.seedBefore)) opts.seed(db);
+    db.exec(readFileSync(new URL(f, dir), "utf8"));
+  }
   return {
     prepare: (sql: string) => new Stmt(db, sql),
     // Like D1: all statements in one transaction, all or nothing.

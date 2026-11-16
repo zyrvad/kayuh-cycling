@@ -2,6 +2,8 @@ import { effect } from "@preact/signals";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "./api.ts";
 import { Discover } from "./components/Discover.tsx";
+import { Onboarding, showOnboarding } from "./components/Onboarding.tsx";
+import { handleFollowLink } from "./components/Feed.tsx";
 import { Plan } from "./components/Plan.tsx";
 import { Ride } from "./components/Ride.tsx";
 import { CrewTab } from "./components/Crew.tsx";
@@ -15,6 +17,10 @@ import {
   current, mapBearing, mode, rideDetail, myLocation, openCrew, openGroupRide, pickIndex, points, refreshMe, refreshPace, results, rideView, routerInfo, screen, selected,
   setPoint, sharedName, showToast, toast,
 } from "./state.ts";
+
+function hasActiveRide() {
+  try { return localStorage.getItem("kayuh.activeRide") !== null; } catch { return false; }
+}
 
 export function App() {
   const mapEl = useRef<HTMLDivElement>(null);
@@ -86,6 +92,8 @@ export function App() {
       api.joinCrew(join[1]).then((j) => { showToast(`You joined ${j.name}`); openCrew(j.crewId); })
         .catch((e) => { showToast(e.status === 401 ? "Sign in first, then open the invite link again" : e.message); screen.value = "crew"; });
     }
+    // Follow links (/follow/<code>) from a friend's Friends panel.
+    handleFollowLink();
     const rideLink = location.pathname.match(/^\/ride\/([0-9a-f-]{36})$/);
     if (rideLink) {
       history.replaceState(null, "", "/");
@@ -115,6 +123,7 @@ export function App() {
       {s === "rides" && <RidesTab map={map} />}
       {s === "crew" && <CrewTab />}
       {s === "me" && <MeTab />}
+      {showOnboarding.value && s !== "ride" && !hasActiveRide() && <Onboarding />}
       {toast.value && <div class="toast" role="status">{toast.value}</div>}
       {updateAvailable.value && (
         <button class="update-banner" onClick={() => location.reload()}>

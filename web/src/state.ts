@@ -127,11 +127,18 @@ export function openGroupRide(id: string) {
 export type Screen = "discover" | "plan" | "ride" | "routes" | "rides" | "crew" | "me";
 export const screen = signal<Screen>("discover");
 /** The ride open on the Rides tab's detail page, if any. */
-export const rideDetail = signal<{ id: string; crew?: boolean } | null>(null);
+export const rideDetail = signal<{ id: string; crew?: boolean; back?: Screen } | null>(null);
 
+/** Open a ride's detail page; Back returns to wherever it was opened from (the feed, a crew page...). */
 export function openRide(id: string, crew = false) {
-  rideDetail.value = { id, crew };
+  rideDetail.value = { id, crew, back: screen.value === "rides" ? undefined : screen.value };
   screen.value = "rides";
+}
+
+export function closeRide() {
+  const back = rideDetail.value?.back;
+  rideDetail.value = null;
+  if (back) screen.value = back;
 }
 export const toast = signal<string | null>(null);
 let toastTimer: ReturnType<typeof setTimeout> | undefined;

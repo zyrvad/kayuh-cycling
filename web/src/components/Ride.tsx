@@ -5,11 +5,12 @@ import { clearActiveRide, loadActiveRide, saveActiveRide } from "../activeRide.t
 import type { MapView } from "../map.ts";
 import { rideTitle } from "../places.ts";
 import { router } from "../routerClient.ts";
-import { angleDiff, bearing, blendAngle, requestCompass, watchCompass } from "../heading.ts";
+import { angleDiff, bearing, blendAngle, compassState, requestCompass, watchCompass } from "../heading.ts";
 import { buildActiveRide, current, openRide, prefs, refreshPace, results, rideView, screen, selected, settings, showToast } from "../state.ts";
 import { analyse, summary, TrackRecorder } from "../track.ts";
 import { clock, encodePolyline, km, OPERATOR_NAMES, timeOfDay } from "../util.ts";
 import { Compass } from "./common.tsx";
+import "./ride-extras.css";
 import { Muted, Speaker, Train, Turn } from "./Icons.tsx";
 
 const OFF_ROUTE_M = 40;
@@ -72,6 +73,7 @@ export function Ride({ map }: { map: MapView | null }) {
   const [speed, setSpeed] = useState(0);
   const [offRoute, setOffRoute] = useState(false);
   const [rerouting, setRerouting] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [muted, setMuted] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [bailout, setBailout] = useState<{ mrt: Poi; dist: number } | null>(null);
@@ -126,7 +128,10 @@ export function Ride({ map }: { map: MapView | null }) {
   // After a reload the map can arrive a moment after the ride screen.
   useEffect(() => {
     map?.setPadding({ top: 140, bottom: 330, left: 0, right: 0 });
-    return () => { map?.setPadding({ top: 0, bottom: 0, left: 0, right: 0 }); map?.setDone([]); map?.rotateTo(0, 600); };
+    if (map) map.onFollowPause = setPaused;
+    return () => {
+      if (map) { map.onFollowPause = () => {}; map.resumeFollow(); }
+      map?.setPadding({ top: 0, bottom: 0, left: 0, right: 0 }); map?.setDone([]); map?.rotateTo(0, 600); };
   }, [map]);
 
   // While stopped, turn the map with the phone (which way you're facing). Moving, GPS does it in onPosition.
@@ -200,6 +205,11 @@ export function Ride({ map }: { map: MapView | null }) {
       .finally(() => { reroutingRef.current = false; setRerouting(false); });
   };
 
+  const followBearing = (ll: LonLat) => {
+    const view = rideView.value;
+    mapRef.current?.follow(ll, view === "north" ? 0 : view === "heading" && heading.current !== null ? heading.current : undefined);
+  };
+
   const onPosition = (ll: LonLat, kmh: number | null, course: number | null = null, alt: number | null = null, atMs = Date.now()) => {
     const r = routeRef.current;
     lastLL.current = ll;
@@ -227,9 +237,8 @@ export function Ride({ map }: { map: MapView | null }) {
     mapRef.current?.setDone(r.coords.slice(0, idxRef.current + 1));
     const target = faceTowards(onRoute, kmh, course);
     if (target !== null) heading.current = heading.current === null ? target : blendAngle(heading.current, target, 0.6);
-    const view = rideView.value;
     // Free: keep whatever rotation the rider twisted the map to.
-    mapRef.current?.follow(ll, view === "north" ? 0 : view === "heading" && heading.current !== null ? heading.current : undefined);
+    followBearing(ll);
 
     // Like a car sat-nav: a sustained detour (your group took another way) gets a new route from here.
     if (offSince.current !== null && offCount.current >= 3 && bestD >= REROUTE_M
@@ -254,7 +263,8 @@ export function Ride({ map }: { map: MapView | null }) {
     const id = navigator.geolocation.watchPosition(
       (p) => onPosition(
         [p.coords.longitude, p.coords.latitude],
-        p.coords.speed != null ? p.coords.speed * 3.6 : null,
+        // iOS reports -1 (or null) when it has no speed: unknown, not stopped.
+        p.coords.speed != null && Number.isFinite(p.coords.speed) && p.coords.speed >= 0 ? p.coords.speed * 3.6 : null,
         p.coords.heading != null && !Number.isNaN(p.coords.heading) ? p.coords.heading : null,
         p.coords.altitude ?? null,
         p.timestamp,
@@ -374,6 +384,15 @@ export function Ride({ map }: { map: MapView | null }) {
           const b = rideView.value === "north" ? 0 : heading.current;
           if (b !== null) map?.rotateTo(b, 400);
         }} />
+      {compassState.value === "needs-tap" && (
+        <button class="btn raised ride-compass-ask" onClick={() => requestCompass()}>Tap to let the map turn with you</button>
+      )}
+      {paused && (
+        <button class="btn raised ride-recentre" onClick={() => {
+          map?.resumeFollow();
+          if (lastLL.current) followBearing(lastLL.current);
+        }}>Re-centre</button>
+      )}
       <button class="icon-btn raised ride-mute" aria-label={muted ? "Unmute voice" : "Mute voice"} onClick={() => setMuted(!muted)}>
         {muted ? <Muted /> : <Speaker />}
       </button>

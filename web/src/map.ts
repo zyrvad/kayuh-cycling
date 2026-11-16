@@ -3,6 +3,7 @@ import * as maplibregl from "maplibre-gl";
 import type { GeoJSONSource, LngLatBoundsLike } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import mapWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
+import { angleDiff } from "./heading.ts";
 import { TIER_COLORS, TIER_LABELS } from "./util.ts";
 
 // MapLibre 6 looks for its tile worker next to its own module, which bundling moves. Point it at the copy Vite ships.
@@ -15,6 +16,11 @@ const INK = "#1D2A23";
 const PARKING_CLUSTER_MAX_ZOOM = 16;
 /** Route parking appears from this zoom. */
 const PARKING_MINZOOM = 12;
+
+/** Following resumes this long after the last finger leaves the map. */
+const FOLLOW_RESUME_MS = 8000;
+/** A twist smaller than this within one gesture (e.g. while pinch-zooming) isn't "the rider rotated the map". */
+const USER_ROTATE_DEG = 20;
 
 const empty = (): GeoJSON.FeatureCollection => ({ type: "FeatureCollection", features: [] });
 
@@ -53,8 +59,13 @@ export class MapView {
   readonly map: maplibregl.Map;
   private loaded: Promise<void>;
   private markers: maplibregl.Marker[] = [];
-  /** Map gestures in progress (pan, twist, pinch). */
-  private gestures = 0;
+  /** Pointers (fingers, mouse button) currently down on the map. */
+  private pointers = new Set<number>();
+  private resumeTimer: ReturnType<typeof setTimeout> | null = null;
+  private followPaused = false;
+  /** Bearing when the current user twist began, or null when not twisting. */
+  private twistFrom: number | null = null;
+  private twistFired = false;
   /** Return true when the tap was used (e.g. to place a point), so the map does nothing else with it. */
   onTap: (ll: LonLat) => boolean | void = () => {};
   onDragPoint: (index: number, ll: LonLat) => void = () => {};
@@ -62,6 +73,8 @@ export class MapView {
   onBearing: (deg: number) => void = () => {};
   /** The rider twisted the map themselves (not an animation of ours). */
   onUserRotate: () => void = () => {};
+  /** Following is paused (a finger is on the map, or it was touched in the last few seconds) or resumed. */
+  onFollowPause: (paused: boolean) => void = () => {};
 
   constructor(container: HTMLElement) {
     this.map = new maplibregl.Map({
@@ -79,12 +92,33 @@ export class MapView {
     });
     this.map.touchPitch.disable();
     this.map.on("rotate", () => this.onBearing(this.map.getBearing()));
-    this.map.on("rotatestart", (e) => { if ((e as { originalEvent?: Event }).originalEvent) this.onUserRotate(); });
-    // While a finger is on the map, following the rider must not yank it away mid-gesture.
-    for (const [start, end] of [["dragstart", "dragend"], ["rotatestart", "rotateend"], ["zoomstart", "zoomend"]] as const) {
-      this.map.on(start, (e) => { if ((e as { originalEvent?: Event }).originalEvent) this.gestures++; });
-      this.map.on(end, (e) => { if ((e as { originalEvent?: Event }).originalEvent) this.gestures = Math.max(0, this.gestures - 1); });
-    }
+    // Only a twist of our own accord counts, and only once it passes ~20 degrees: a pinch-zoom wobbles a little.
+    this.map.on("rotatestart", (e) => {
+      if (!(e as { originalEvent?: Event }).originalEvent) return;
+      this.twistFrom = this.map.getBearing();
+      this.twistFired = false;
+    });
+    this.map.on("rotate", (e) => {
+      if (this.twistFrom === null || this.twistFired || !(e as { originalEvent?: Event }).originalEvent) return;
+      if (Math.abs(angleDiff(this.twistFrom, this.map.getBearing())) > USER_ROTATE_DEG) {
+        this.twistFired = true;
+        this.onUserRotate();
+      }
+    });
+    this.map.on("rotateend", () => { this.twistFrom = null; });
+    // While a finger is on the map, following the rider must not yank it away mid-gesture. Counted from raw pointer
+    // events: MapLibre's own end events can arrive without an originalEvent (after inertia, or when a camera move
+    // interrupts a gesture), which left a start/end counter stuck above zero.
+    const down = (e: PointerEvent) => { this.pointers.add(e.pointerId); this.setPaused(true); };
+    const up = (e: PointerEvent) => {
+      if (!this.pointers.delete(e.pointerId)) return;
+      if (this.pointers.size === 0) { this.twistFrom = null; this.armResume(); }
+    };
+    container.addEventListener("pointerdown", down, true);
+    window.addEventListener("pointerup", up, true);
+    window.addEventListener("pointercancel", up, true);
+    // Mouse wheel zoom has no pointer-down: treat it as a touch that ends at once.
+    container.addEventListener("wheel", () => { this.setPaused(true); if (this.pointers.size === 0) this.armResume(); }, { passive: true });
     this.loaded = new Promise((resolve) => this.map.on("load", () => {
       this.addLayers();
       // Keep the attribution as a small (i) button instead of a banner over the map.
@@ -354,9 +388,28 @@ export class MapView {
     this.map.fitBounds(b as LngLatBoundsLike, { padding, duration: 600, maxZoom: 16 });
   }
 
+  private setPaused(p: boolean) {
+    if (p && this.resumeTimer) { clearTimeout(this.resumeTimer); this.resumeTimer = null; }
+    if (this.followPaused === p) return;
+    this.followPaused = p;
+    this.onFollowPause(p);
+  }
+
+  private armResume() {
+    if (this.resumeTimer) clearTimeout(this.resumeTimer);
+    this.resumeTimer = setTimeout(() => { this.resumeTimer = null; this.setPaused(false); }, FOLLOW_RESUME_MS);
+  }
+
+  /** Follow again now (the Re-centre button), without waiting out the timer. */
+  resumeFollow() {
+    this.pointers.clear();
+    if (this.resumeTimer) { clearTimeout(this.resumeTimer); this.resumeTimer = null; }
+    this.setPaused(false);
+  }
+
   /** Keep the rider centred. Without a bearing the map keeps whatever rotation it has. */
   follow(ll: LonLat, bearing?: number) {
-    if (this.gestures > 0) return;
+    if (this.followPaused) return;
     this.map.easeTo({ center: ll, zoom: Math.max(this.map.getZoom(), 16), bearing: bearing ?? this.map.getBearing(), duration: 800 });
   }
 

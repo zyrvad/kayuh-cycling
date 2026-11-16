@@ -1,16 +1,29 @@
 /** Which way the phone is pointing, from the compass, for heading-up navigation. */
 
-let permission: Promise<boolean> | null = null;
+import { signal } from "@preact/signals";
+
+/** granted: compass events flow; needs-tap: iOS wants a tap to prompt; unavailable: no compass, or the rider said no. */
+export type CompassState = "granted" | "needs-tap" | "unavailable";
+
+type DOEWithPermission = { requestPermission?: () => Promise<string> };
+const doe = () => (window as { DeviceOrientationEvent?: DOEWithPermission }).DeviceOrientationEvent;
+
+export const compassState = signal<CompassState>(!doe() ? "unavailable" : doe()!.requestPermission ? "needs-tap" : "granted");
+
+let pending: Promise<CompassState> | null = null;
 
 /**
- * iOS only shows the compass to pages after a permission prompt, which must start from a tap.
- * Call this from the tap that starts a ride; elsewhere it resolves straight away.
+ * iOS only shows the compass to pages after a permission prompt, which must start from a tap. Called without a tap it
+ * rejects: that is not remembered, so a later tap can still prompt. Only a pending request is shared.
  */
-export function requestCompass(): Promise<boolean> {
-  const DOE = (window as { DeviceOrientationEvent?: { requestPermission?: () => Promise<string> } }).DeviceOrientationEvent;
-  if (!DOE) return Promise.resolve(false);
-  if (!DOE.requestPermission) return Promise.resolve(true);
-  return (permission ??= DOE.requestPermission().then((s) => s === "granted").catch(() => false));
+export function requestCompass(): Promise<CompassState> {
+  const DOE = doe();
+  if (!DOE) return Promise.resolve((compassState.value = "unavailable"));
+  if (!DOE.requestPermission || compassState.value === "granted") return Promise.resolve((compassState.value = "granted"));
+  return (pending ??= DOE.requestPermission()
+    .then((s): CompassState => (s === "granted" ? "granted" : s === "denied" ? "unavailable" : "needs-tap"))
+    .catch((): CompassState => "needs-tap")
+    .then((st) => { pending = null; return (compassState.value = st); }));
 }
 
 /** Calls back with the compass heading (degrees clockwise from north). Returns a function to stop. */

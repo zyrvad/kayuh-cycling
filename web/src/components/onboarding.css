@@ -1,0 +1,16 @@
+.onb { position: fixed; inset: 0; z-index: 100; background: var(--ground); display: flex; align-items: center; justify-content: center;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px)); overflow-y: auto; }
+.onb-card { width: 100%; max-width: 460px; max-height: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 24px 20px 20px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+.onb-top { display: flex; align-items: center; justify-content: space-between; min-height: 44px; }
+.onb-dots { display: flex; gap: 8px; }
+.onb-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.onb-dot.on { background: var(--accent); width: 22px; border-radius: 4px; }
+.onb-skip { background: none; border: 0; color: var(--muted); font-size: 14px; font-weight: 600; min-height: 44px; padding: 0 8px; }
+.onb h1 { font-size: 24px; margin: 0; color: var(--ink); }
+.onb p { margin: 0; line-height: 1.45; }
+.onb ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; }
+.onb li { background: var(--accent-soft); color: var(--accent-ink); border-radius: 14px; padding: 12px 14px; line-height: 1.4; }
+.onb ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; line-height: 1.4; }
+.onb-note { background: var(--accent-soft); color: var(--accent-ink); border-radius: 14px; padding: 12px 14px; line-height: 1.4; }
+.onb-nav { display: flex; gap: 10px; margin-top: 4px; }
+.onb-nav .btn { flex: 1; min-height: 48px; }
