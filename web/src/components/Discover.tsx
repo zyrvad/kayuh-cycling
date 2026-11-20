@@ -1,14 +1,14 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { LonLat, RouteResult } from "@kayuh/router";
 import { router, type NearbyParking } from "../routerClient.ts";
 import { api, type GroupRideSummary } from "../api.ts";
 import {
-  cap, conditions, groupCap, locate, loopKm, me, mode, myLocation, openGroupRide, pickIndex, points, prefs, refreshConditions, routerInfo,
+  cap, conditions, groupCap, locate, loopKm, mapIntent, me, mode, myLocation, openGroupRide, pickIndex, points, prefs, refreshConditions, routerInfo,
   screen, settings, type Mode,
 } from "../state.ts";
 import { duration, km, OPERATOR_NAMES, sunset, TIER_COLORS, timeOfDay } from "../util.ts";
 import { Avatar, Compass, Sheet, TabBar, TierBar } from "./common.tsx";
-import { Layers, Locate, Search } from "./Icons.tsx";
+import { Cloud, CloudRain, Layers, Locate, Search } from "./Icons.tsx";
 import { SearchSheet } from "./SearchSheet.tsx";
 import type { MapView } from "../map.ts";
 
@@ -19,6 +19,8 @@ export function Discover({ map }: { map: MapView | null }) {
   const [legend, setLegend] = useState(true);
   const [parking, setParking] = useState<NearbyParking[]>([]);
   const [suggestions, setSuggestions] = useState<{ km: number; r: RouteResult }[]>([]);
+  const [condOpen, setCondOpen] = useState(false);
+  const condRef = useRef<HTMLDivElement>(null);
   const [nextRide, setNextRide] = useState<GroupRideSummary | null>(null);
   const here = myLocation.value ?? FALLBACK;
 
@@ -56,25 +58,58 @@ export function Discover({ map }: { map: MapView | null }) {
     setSearching(true);
   };
 
+  // Home asks for the search sheet by setting mapIntent; open it once, then clear it.
+  const intent = mapIntent.value;
+  useEffect(() => {
+    if (intent === "search") { openSearch(); mapIntent.value = null; }
+  }, [intent]);
+  // The conditions popover closes on any tap outside it.
+  useEffect(() => {
+    if (!condOpen) return;
+    const away = (e: PointerEvent) => { if (!condRef.current?.contains(e.target as Node)) setCondOpen(false); };
+    document.addEventListener("pointerdown", away);
+    return () => document.removeEventListener("pointerdown", away);
+  }, [condOpen]);
+
   const c = conditions.value;
   const sun = sunset(new Date());
   const closest = parking[0];
+  const heatHigh = !!c?.heat && /high|extreme|moderate/i.test(c.heat.level) && !/low/i.test(c.heat.level);
+  const warn = !!c?.forecast?.rainLikely || heatHigh;
 
   return (
     <>
       <div class="top-stack">
         <div class="row">
-          <button class="searchbox as-button" onClick={openSearch}>
+          <button class="searchbox as-button" data-tour="map-search" onClick={openSearch}>
             <Search /> <span class="placeholder">Where to? Place or postal code</span>
           </button>
           <button class="icon-btn raised profile" aria-label="Settings and profile" data-tour="profile" onClick={() => (screen.value = "me")}>
             <Avatar name={me.value?.displayName || me.value?.email || "Me"} url={me.value?.avatar} />
           </button>
         </div>
+        <div class="chips-row">
         <div class="chips">
           <button class="chip active" onClick={openSearch}>A to B</button>
           <button class="chip" onClick={() => start("loop")}>Loop</button>
           <button class="chip" onClick={() => start("freeform")}>Freeform</button>
+        </div>
+          <div class="cond-wrap" ref={condRef}>
+            <button class={`cond-pill${warn ? " warn" : ""}`} aria-expanded={condOpen} aria-label="Weather and sunset" onClick={() => setCondOpen(!condOpen)}>
+              {c?.forecast?.rainLikely ? <CloudRain /> : <Cloud />}
+              {c?.tempC && <span>{Math.round(c.tempC.value)}°</span>}
+              <span><span class="cond-long">Sunset </span>{timeOfDay(sun)}</span>
+            </button>
+            {condOpen && (
+              <div class="cond-pop" role="dialog" aria-label="Conditions">
+                {c?.forecast && <div><strong class={c.forecast.rainLikely ? "warn-text" : ""}>{c.forecast.text}</strong><span class="muted">{c.forecast.area}</span></div>}
+                {c?.tempC && <div><strong>{Math.round(c.tempC.value)}°C</strong><span class="muted">Temperature</span></div>}
+                {c?.heat && <div><strong class={heatHigh ? "warn-text" : ""}>Heat {c.heat.level.toLowerCase()}</strong><span class="muted">WBGT {Math.round(c.heat.wbgt)}</span></div>}
+                <div><strong>Sunset {timeOfDay(sun)}</strong><span class="muted">Today</span></div>
+                {!c && <span class="muted">Conditions unavailable</span>}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -88,7 +123,7 @@ export function Discover({ map }: { map: MapView | null }) {
       </div>
 
       {legend && (
-        <div class="legend" aria-label="Map legend">
+        <div class="legend" data-tour="map-legend" aria-label="Map legend">
           {[["Park connector", TIER_COLORS[0]], ["Cycling path", TIER_COLORS[1]], ["Shared path", TIER_COLORS[2]]].map(([l, c]) => (
             <div key={l}><span class="swatch" style={{ background: c }} />{l}</div>
           ))}
@@ -97,7 +132,7 @@ export function Discover({ map }: { map: MapView | null }) {
         </div>
       )}
 
-      <Sheet class="sheet discover-sheet" peek={96}>
+      <Sheet class="sheet discover-sheet" peek={100} detents={["collapsed", "half", "full"]} initial="half" summary={
         <div class="row between">
           <div class="stack-2">
             <strong class="lg">{parking.length ? `${parking.length} legal parking spot${parking.length > 1 ? "s" : ""} nearby` : "No legal parking within 400 m"}</strong>
@@ -107,6 +142,7 @@ export function Discover({ map }: { map: MapView | null }) {
           </div>
           <span class="pill-soft">{OPERATOR_NAMES[settings.value.operator]}</span>
         </div>
+      }>
         {nextRide && (
           <button class="next-ride" onClick={() => openGroupRide(nextRide.id)}>
             <span class="eyebrow">Next group ride{nextRide.crewName ? ` · ${nextRide.crewName}` : ""}</span>
@@ -117,11 +153,6 @@ export function Discover({ map }: { map: MapView | null }) {
             </span>
           </button>
         )}
-        <div class="cond-chips">
-          {c?.forecast && <span class={c.forecast.rainLikely ? "cond warn" : "cond"}>{c.forecast.text} · {c.forecast.area}</span>}
-          {c?.tempC && <span class="cond">{Math.round(c.tempC.value)}°C{c.heat ? ` · heat ${c.heat.level.toLowerCase()}` : ""}</span>}
-          <span class="cond">Sunset {timeOfDay(sun)}</span>
-        </div>
         <div class="stack-8">
           <div class="eyebrow">Suggested from here</div>
           <div class="cards">

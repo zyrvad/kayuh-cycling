@@ -1,0 +1,20 @@
+/* Detent sheet (Sheet.tsx with `detents`). Height is the "full" detent; position is a translateY set from JS. */
+.sheet.sheet-d {
+  --sheet-bottom: calc(72px + var(--safe-bottom, 0px));
+  top: auto; bottom: var(--sheet-bottom);
+  height: calc(100% - var(--sheet-bottom) - 64px - env(safe-area-inset-top, 0px));
+  padding: 0; gap: 0; overflow: hidden;
+  will-change: transform;
+  transition: transform 240ms var(--ease, cubic-bezier(.2, .8, .2, 1));
+}
+.sheet-d:not(.ready), .sheet-d.no-anim { transition: none; }
+@media (prefers-reduced-motion: reduce) { .sheet-d { transition: none; } }
+.sheet-d .sheet-head { flex-shrink: 0; padding: 0 16px; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.sheet-d .sheet-head:active { cursor: grabbing; }
+.sheet-d .sheet-grip { display: flex; justify-content: center; align-items: center; width: calc(100% + 32px); height: 30px; margin: 0 -16px; padding: 0; border: 0; background: none; cursor: inherit; touch-action: none; }
+.sheet-d .sheet-grip:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 12px; }
+.sheet-d .sheet-grip .handle { width: 40px; }
+.sheet-d .sheet-summary { padding-bottom: 12px; }
+.sheet-d .sheet-body { flex: 1; min-height: 0; overflow-y: hidden; overscroll-behavior: contain; padding: 0 16px 16px; }
+.sheet-d.is-full .sheet-body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.sheet-d .sheet-content { display: flex; flex-direction: column; gap: 14px; }

@@ -115,7 +115,7 @@ input { font: inherit; }
 .chip { height: 36px; padding: 0 14px; border-radius: 18px; border: 0; background: var(--surface); color: var(--ink); font-weight: 600; font-size: 14px; box-shadow: 0 1px 4px rgba(21, 32, 26, 0.1); white-space: nowrap; }
 .chip.active { background: var(--accent); color: #FFFFFF; }
 .map-buttons { position: absolute; right: 16px; top: calc(140px + env(safe-area-inset-top, 0px)); display: flex; flex-direction: column; gap: 10px; z-index: 2; }
-.legend { position: absolute; left: 16px; top: calc(118px + env(safe-area-inset-top, 0px)); padding: 10px 12px; background: rgba(255, 255, 255, 0.95); border-radius: 12px; box-shadow: 0 1px 6px rgba(21, 32, 26, 0.1); font-size: 12px; font-weight: 500; color: var(--ink-2); display: flex; flex-direction: column; gap: 6px; z-index: 2; }
+.legend { position: absolute; left: 16px; top: calc(118px + env(safe-area-inset-top, 0px)); padding: 10px 12px; background: rgba(255, 255, 255, 0.95); border-radius: 12px; box-shadow: 0 1px 6px rgba(21, 32, 26, 0.1); font-size: 12px; font-weight: 500; color: var(--ink-2); display: flex; flex-direction: column; gap: 6px; z-index: 1; }
 .legend div { display: flex; align-items: center; gap: 8px; }
 .swatch { width: 18px; height: 4px; border-radius: 2px; }
 .swatch.dotted { height: 0; border-top: 2px dotted #7C8681; }
@@ -124,9 +124,15 @@ input { font: inherit; }
 .sheet { position: absolute; left: 0; right: 0; background: var(--surface); border-radius: 22px 22px 0 0; box-shadow: var(--shadow-up); padding: 10px 16px 16px; display: flex; flex-direction: column; gap: 14px; z-index: 3; }
 .handle { align-self: center; width: 36px; height: 4px; border-radius: 2px; background: var(--line-2); flex-shrink: 0; }
 .discover-sheet { bottom: calc(72px + var(--safe-bottom)); }
-.cond-chips { display: flex; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); }
-.cond { padding: 6px 10px; border-radius: 10px; background: var(--soft); }
-.cond.warn { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
+.chips-row { display: flex; gap: 8px; align-items: flex-start; }
+.chips-row .chips { flex: 1; min-width: 0; }
+.chips-row .chip { padding: 0 12px; font-size: 13px; }
+@media (max-width: 400px) { .cond-long { display: none; } }
+.cond-wrap { position: relative; margin-left: auto; flex-shrink: 0; }
+.cond-pill { height: 36px; padding: 0 12px; border-radius: 18px; border: 0; display: inline-flex; align-items: center; gap: 6px; background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 600; box-shadow: 0 1px 4px rgba(21, 32, 26, 0.1); white-space: nowrap; }
+.cond-pill.warn { background: var(--warn-soft); color: var(--warn); }
+.cond-pop { position: absolute; right: 0; top: 44px; z-index: 5; min-width: 220px; padding: 12px 14px; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+.cond-pop > div { display: flex; flex-direction: column; gap: 1px; }
 .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .card { padding: 12px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); text-align: left; display: flex; flex-direction: column; gap: 6px; }
 .card strong { font-size: 15px; }
@@ -372,3 +378,10 @@ a.btn { text-decoration: none; color: inherit; }
 .page-head .icon-btn { background: transparent; }
 .page-head .icon-btn.profile { background: var(--surface); width: 44px; height: 44px; border-radius: 22px; padding: 0; overflow: hidden; }
 .page-head .icon-btn.profile .avatar { width: 100%; height: 100%; border-radius: inherit; background: var(--surface); }
+
+/* Rides: primary switch is a tall segmented control; secondary is a pair of small chips. */
+.rides-switch .seg { height: 44px; }
+.chip-row { display: flex; gap: 8px; }
+.chip-toggle { position: relative; height: 32px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-2); background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; }
+.chip-toggle::after { content: ""; position: absolute; inset: -6px -2px; }
+.chip-toggle[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-deep); border-color: transparent; font-weight: 700; }
