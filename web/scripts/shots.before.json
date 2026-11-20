@@ -1,0 +1,266 @@
+[
+ {
+  "name": "onboarding",
+  "steps": [
+   {
+    "localStorage": {
+     "kayuh.onboarded": null
+    }
+   },
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   }
+  ]
+ },
+ {
+  "name": "map-sheet",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "waitFor": ".discover-sheet"
+   },
+   {
+    "wait": 6000
+   }
+  ]
+ },
+ {
+  "name": "map-collapsed",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "waitFor": ".sheet-grip"
+   },
+   {
+    "wait": 2000
+   },
+   {
+    "click": ".sheet-grip"
+   },
+   {
+    "wait": 6000
+   }
+  ]
+ },
+ {
+  "name": "plan-route",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "clickText": "Routes"
+   },
+   {
+    "wait": 2500
+   },
+   {
+    "clickText": "Bishan-Ang Mo Kio Park loop"
+   },
+   {
+    "wait": 9000
+   }
+  ]
+ },
+ {
+  "name": "routes",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "clickText": "Routes"
+   },
+   {
+    "wait": 4500
+   }
+  ]
+ },
+ {
+  "name": "rides-mine",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "clickText": "Rides"
+   },
+   {
+    "waitFor": ".stat-tiles"
+   },
+   {
+    "wait": 3500
+   }
+  ]
+ },
+ {
+  "name": "rides-training",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "clickText": "Rides"
+   },
+   {
+    "waitFor": ".rides-switch"
+   },
+   {
+    "clickText": "Training"
+   },
+   {
+    "wait": 3500
+   }
+  ]
+ },
+ {
+  "name": "rides-crew",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "clickText": "Rides"
+   },
+   {
+    "waitFor": ".rides-switch"
+   },
+   {
+    "clickText": "Crew"
+   },
+   {
+    "wait": 3500
+   }
+  ]
+ },
+ {
+  "name": "ride-detail",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "clickText": "Rides"
+   },
+   {
+    "waitFor": ".stat-tiles"
+   },
+   {
+    "wait": 2500
+   },
+   {
+    "clickText": "Sunrise at East Coast Park"
+   },
+   {
+    "wait": 7000
+   }
+  ]
+ },
+ {
+  "name": "crew-feed",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "clickText": "Crew"
+   },
+   {
+    "wait": 4000
+   }
+  ]
+ },
+ {
+  "name": "crew-list",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "clickText": "Crew"
+   },
+   {
+    "waitFor": "[aria-label=Show]"
+   },
+   {
+    "clickText": "Crews"
+   },
+   {
+    "wait": 3000
+   }
+  ]
+ },
+ {
+  "name": "crew-detail",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "clickText": "Crew"
+   },
+   {
+    "waitFor": "[aria-label=Show]"
+   },
+   {
+    "clickText": "Crews"
+   },
+   {
+    "waitFor": ".list-card"
+   },
+   {
+    "clickText": "Sunday Kakis"
+   },
+   {
+    "wait": 3500
+   }
+  ]
+ },
+ {
+  "name": "me-top",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "clickText": "Me"
+   },
+   {
+    "wait": 2500
+   }
+  ]
+ },
+ {
+  "name": "me-bottom",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "clickText": "Me"
+   },
+   {
+    "wait": 2500
+   },
+   {
+    "scroll": {
+     "selector": "window",
+     "y": "end"
+    }
+   },
+   {
+    "wait": 800
+   }
+  ]
+ }
+]
