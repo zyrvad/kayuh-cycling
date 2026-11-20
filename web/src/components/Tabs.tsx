@@ -40,14 +40,14 @@ export function RoutesTab() {
       <Page title="Saved routes">
         {error && <div class="banner warn">{error}</div>}
         {routes?.length === 0 && (
-          <div class="rc-empty">
+          <div class="rc-empty" data-tour="routes-list">
             <p class="muted">Routes you save or share show up here.</p>
             <button class="btn tertiary sm" onClick={() => { screen.value = "discover"; }}>Plan a route</button>
           </div>
         )}
         <ul class="rc-list">
-          {routes?.map((r) => (
-            <li key={r.id}>
+          {routes?.map((r, i) => (
+            <li key={r.id} data-tour={i === 0 ? "routes-list" : undefined}>
               <RouteCard polyline={r.polyline} title={r.name} meta={summary(r)} tierM={r.tierM} onOpen={() => openSaved(r)}
                 actions={<>
                   <button class="btn primary sm grow" onClick={() => openSaved(r)}>Ride</button>

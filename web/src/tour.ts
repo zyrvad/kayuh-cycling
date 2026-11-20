@@ -1,7 +1,7 @@
 import { signal } from "@preact/signals";
 import { screen, type Screen } from "./state.ts";
 
-export type TourStep = { sel: string; title: string; text: string; screen?: Screen; before?: () => void };
+export type TourStep = { sel: string; title: string; text: string; screen?: Screen; before?: () => void; /** Runs once when the tour ends; `done` is true for the Done button. */ onEnd?: (done: boolean) => void };
 export type TourRect = { x: number; y: number; w: number; h: number };
 export type TourState = { steps: TourStep[]; i: number };
 
@@ -15,6 +15,7 @@ let opts: { key?: string; onDone?: () => void } = {};
 let token = 0;
 let cleanup: (() => void) | null = null;
 let el: Element | null = null;
+let curSel = "";
 
 const usable = (e: Element | null): e is Element => {
   if (!e) return false;
@@ -44,6 +45,8 @@ function waitFor(sel: string, t: number): Promise<Element | null> {
 }
 
 function measure() {
+  // the screen may re-render and swap the node: look it up again
+  if (el && !el.isConnected && curSel) { const n = document.querySelector(curSel); if (usable(n)) { el = n; ro?.disconnect(); ro?.observe(n); } }
   if (!el || !el.isConnected) return;
   const r = el.getBoundingClientRect();
   if (r.width === 0 || r.height === 0) return;
@@ -66,6 +69,8 @@ async function goTo(i: number, dir: 1 | -1) {
       if (step.screen && screen.value !== step.screen) screen.value = step.screen;
       step.before?.();
     } catch { /* a bad hook must not kill the tour */ }
+    // Let a screen switch render first, so we never grab a node from the screen that is going away.
+    await new Promise((r) => setTimeout(r, 0));
     const found = await waitFor(step.sel, t);
     if (t !== token) return;
     if (found) {
@@ -136,6 +141,7 @@ export function endTour(done = false) {
   tourRect.value = null;
   const cb = opts.onDone;
   opts = {};
+  if (was) for (const s of was.steps) { try { s.onEnd?.(done); } catch { /* ignore */ } }
   if (was && done && cb) cb();
 }
 

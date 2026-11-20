@@ -83,7 +83,7 @@ export function ProfilePage() {
       <Page title="Profile" profile={false} actions={
         <button class="icon-btn" aria-label="Settings" data-tour="settings-link" onClick={() => (screen.value = "settings")}><Gear /></button>
       }>
-        <div class="profile-head" data-tour="profile">
+        <div class="profile-head" data-tour="profile-head">
           <Avatar name={name} url={m?.avatar} />
           <h2>{name}</h2>
           {m?.signedIn ? (

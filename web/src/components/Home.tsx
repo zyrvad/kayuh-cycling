@@ -84,7 +84,8 @@ export function Home() {
 
           {signedIn && rides && (
             <div class="home-sec">
-              <button class="home-week" onClick={() => (screen.value = "rides")}>
+              <div class="home-week">
+                <button class="home-week-hit" aria-label="Open rides" onClick={() => (screen.value = "rides")} />
                 {goal && (
                   <span class="ring">
                     <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
@@ -99,9 +100,9 @@ export function Home() {
                   <span class="sub">{goal ? `of ${goal.target} km goal · ` : ""}{weekRides.length} ride{weekRides.length === 1 ? "" : "s"}</span>
                 </span>
                 {!goal && (
-                  <span class="btn tertiary sm" role="button" onClick={(e) => { e.stopPropagation(); trainingOn.value = true; screen.value = "rides"; }}>Set a goal</span>
+                  <button class="btn tertiary sm home-week-goal" onClick={() => { trainingOn.value = true; screen.value = "rides"; }}>Set a goal</button>
                 )}
-              </button>
+              </div>
             </div>
           )}
 

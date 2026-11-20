@@ -177,7 +177,7 @@ export function Plan({ map }: { map: MapView | null }) {
   return (
     <>
       <div class="plan-top">
-        <div class="plan-head raised-card">
+        <div class="plan-head raised-card" data-tour="plan-stops">
           <button class="icon-btn soft" aria-label="Back" onClick={() => { screen.value = "discover"; pickIndex.value = null; sharedName.value = null; groupCap.value = null; }}><Back /></button>
           {collapsed
             ? <StopsSummary onOpen={() => setListOpen(true)} />
@@ -283,8 +283,8 @@ export function Plan({ map }: { map: MapView | null }) {
             <Bookmark fill={savedRouteId.value ? "currentColor" : "none"} />
           </button>
           <button class="icon-btn outline" aria-label="Share route" onClick={() => setSharing(true)}><Share /></button>
-          <button class="btn outline grow nowrap" onClick={() => sendToWatch(r, routeName()).catch((e) => showToast(e.message))}><Watch /> Send to watch (GPX)</button>
-          <button class="btn primary grow" onClick={() => startRide(r)}>Start ride</button>
+          <button class="btn outline grow nowrap" data-tour="plan-watch" onClick={() => sendToWatch(r, routeName()).catch((e) => showToast(e.message))}><Watch /> Send to watch (GPX)</button>
+          <button class="btn primary grow" data-tour="ride-button" onClick={() => startRide(r)}>Start ride</button>
         </div>
       )}
 
