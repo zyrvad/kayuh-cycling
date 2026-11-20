@@ -70,11 +70,11 @@ export function Onboarding() {
       <div class="onb-nav">
         {!last && <>
           <button class="btn primary" onClick={() => setI(i + 1)}>Next</button>
-          {i > 0 && <button class="btn outline" onClick={() => setI(i - 1)}>Back</button>}
+          {i > 0 && <button class="btn secondary" onClick={() => setI(i - 1)}>Back</button>}
         </>}
         {last && <>
           <button class="btn primary" onClick={tour}>Show me around</button>
-          <button class="btn onb-tertiary" onClick={close}>Not now</button>
+          <button class="btn tertiary" onClick={close}>Not now</button>
         </>}
       </div>
     </div>

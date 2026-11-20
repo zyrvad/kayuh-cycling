@@ -50,7 +50,7 @@ export function SettingsPage() {
             </span>
             <input type="checkbox" checked={s.learnPace} onChange={(e) => updateSettings({ learnPace: (e.target as HTMLInputElement).checked })} />
           </label>
-          <p class="muted small">Estimates include about 40 s at each set of traffic lights and 1.5 min to re-park between legs. They come out around 1.5–2× Google Maps' cycling times.</p>
+          <p class="muted small">Estimates include about 40 s at each set of traffic lights and 1.5 min to re-park between legs. They come out around 1.5 to 2× Google Maps' cycling times.</p>
         </section>
         <section class="group">
           <h2>Route preferences</h2>
@@ -207,7 +207,7 @@ function PhotoPicker({ name, url }: { name: string; url: string | null }) {
           <input type="file" accept="image/*" class="sr" disabled={busy} onChange={pick} />
         </label>
         {url && !busy && (
-          <button type="button" class="link-btn" onClick={async () => {
+          <button type="button" class="btn tertiary sm" onClick={async () => {
             await api.removeAvatar().then(refreshMe).catch((err) => showToast(err.message));
           }}>Remove photo</button>
         )}

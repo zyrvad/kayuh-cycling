@@ -62,7 +62,7 @@ export function RideHealth({ ride, a, samples, cursor, onCursor, onRpe, watchFil
           <h2 class="section-title">Heart rate</h2>
           <div class="health-stats">
             <div><small>Average</small><span><b>{st.avgHr}</b> bpm</span></div>
-            <div><small>Max{a?.hrMax?.estimated ? " (est.)" : ""}</small><span><b>{st.maxHr ?? "–"}</b> bpm</span></div>
+            <div><small>Max{a?.hrMax?.estimated ? " (est.)" : ""}</small><span><b>{st.maxHr ?? "-"}</b> bpm</span></div>
             {a?.hrMax && <div><small>Zones use</small><span><b>{a.hrMax.bpm}</b> bpm{a.hrMax.estimated ? " est." : ""}</span></div>}
           </div>
           {a?.hrMax?.estimated && <p class="muted small">Your max heart rate is estimated. Set your own in Me for accurate zones.</p>}
@@ -78,8 +78,8 @@ export function RideHealth({ ride, a, samples, cursor, onCursor, onRpe, watchFil
           <h2 class="section-title">Power</h2>
           <div class="health-stats">
             <div><small>Average</small><span><b>{st.avgPower}</b> W</span></div>
-            <div><small>Max</small><span><b>{st.maxPower ?? "–"}</b> W</span></div>
-            <div><small>Normalized</small><span><b>{st.np ?? "–"}</b> W</span></div>
+            <div><small>Max</small><span><b>{st.maxPower ?? "-"}</b> W</span></div>
+            <div><small>Normalized</small><span><b>{st.np ?? "-"}</b> W</span></div>
             {ftp && a?.intensityFactor !== undefined && <div><small>Intensity</small><span><b>{a.intensityFactor.toFixed(2)}</b> IF</span></div>}
             {ftp && st.tss !== undefined && <div><small>Training stress</small><span><b>{st.tss}</b> TSS</span></div>}
           </div>

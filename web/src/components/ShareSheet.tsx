@@ -86,7 +86,7 @@ export function ShareSheet({ name, summary, routeId, onGroupRide, onClose }: {
                   <li key={c.id} class="list-card share-row">
                     <span class="avatar"><TabCrew /></span>
                     <span class="list-main"><strong>{c.name}</strong><span class="muted small">{c.members} member{c.members === 1 ? "" : "s"}</span></span>
-                    <button class={done.has(c.id) ? "btn outline" : "btn primary"} disabled={busy === c.id} onClick={() => toCrew(c)}>
+                    <button class={done.has(c.id) ? "btn secondary sm" : "btn primary sm"} disabled={busy === c.id} onClick={() => toCrew(c)}>
                       {done.has(c.id) ? "Shared ✓" : busy === c.id ? "Sharing…" : "Share"}
                     </button>
                   </li>
@@ -98,9 +98,9 @@ export function ShareSheet({ name, summary, routeId, onGroupRide, onClose }: {
         </section>
 
         {onGroupRide && (
-          <button class="btn outline" onClick={onGroupRide}>Plan a group ride with a date</button>
+          <button class="btn secondary" onClick={onGroupRide}>Plan a group ride with a date</button>
         )}
-        <button class="btn outline" disabled={busy === "link"} onClick={asLink}><Share size={18} /> Send a link instead</button>
+        <button class="btn secondary" disabled={busy === "link"} onClick={asLink}><Share size={18} /> Send a link instead</button>
         <p class="muted small">For WhatsApp or Telegram. Only friends who can sign in to Kayuh can open it.</p>
       </div>
     </div>

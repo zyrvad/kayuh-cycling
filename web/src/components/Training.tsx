@@ -63,7 +63,7 @@ function Goals({ rides }: { rides: Ride[] }) {
     <section class="stack-8">
       <div class="row between">
         <h2 class="section-title">Goals</h2>
-        {signedIn && <button class="pill-btn" onClick={() => setEditing("new")}><Plus size={14} /> Add</button>}
+        {signedIn && <button class="pill-btn" onClick={() => setEditing("new")}><Plus size={18} /> Add</button>}
       </div>
       {signedIn === false && <div class="banner info">Sign in from the Crew tab to set distance, time or ride goals.</div>}
       {signedIn && goals?.length === 0 && (
@@ -140,7 +140,7 @@ function GoalSheet({ goal, taken, onClose, onSaved }: { goal: Goal | null; taken
         {replaces && <p class="muted small">You already have this goal. Saving changes its target.</p>}
         <button class="btn primary" disabled={!valid || busy}
           onClick={() => run(() => api.setGoal({ period, metric, target: value }), "Goal saved")}>{busy ? "Saving…" : "Save"}</button>
-        {goal && <button class="btn outline danger" disabled={busy} onClick={() => run(() => api.deleteGoal(goal.id), "Goal deleted")}>Delete goal</button>}
+        {goal && <button class="btn destructive" disabled={busy} onClick={() => run(() => api.deleteGoal(goal.id), "Goal deleted")}>Delete goal</button>}
       </div>
     </div>
   );
@@ -298,7 +298,7 @@ function DayDot({ d, size, max, today, onTap }: { d: DayLog<Ride>; size: number;
 function WeekTotals({ w }: { w: WeekLog<Ride> }) {
   return (
     <span class="tlog-total">
-      <b>{w.rides ? `${km(w.distanceM)} km` : "–"}</b>
+      <b>{w.rides ? `${km(w.distanceM)} km` : "-"}</b>
       <small class="muted">{w.rides ? duration(w.movingS) : ""}</small>
     </span>
   );

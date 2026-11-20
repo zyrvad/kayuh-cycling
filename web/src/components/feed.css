@@ -9,7 +9,7 @@
 .feed-map-empty { display: flex; align-items: center; justify-content: center; text-align: center; padding: 0 24px; }
 .feed-more { width: 100%; }
 
-.kudos-btn { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); font-size: 14px; font-weight: 700; }
+.kudos-btn { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); font-size: 14px; font-weight: 700; }
 .kudos-btn.on { background: var(--warm-soft, #FCEBDD); border-color: transparent; color: var(--warm, #E0752D); }
 .kudos-btn.static { border-color: transparent; background: var(--soft); color: var(--muted); }
 .social-row { display: flex; align-items: center; gap: 12px; }
@@ -29,5 +29,4 @@
 .person-row { padding-left: 12px; }
 .person-row .list-main { padding: 12px 8px; }
 .person-actions { gap: 6px; flex-shrink: 0; }
-.person-actions .small-btn { padding: 0 12px; }
 .list:has(> li > .route-card) { gap: 12px; }

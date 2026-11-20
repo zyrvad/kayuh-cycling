@@ -16,7 +16,6 @@
 .onb-note { background: var(--accent-soft); color: var(--accent-ink); border-radius: 14px; padding: 12px 14px; line-height: 1.45; display: flex; flex-direction: column; gap: 4px; font-size: 15px; }
 .onb-nav { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; max-width: 520px; width: 100%; margin: 0 auto; padding-top: 8px; }
 .onb-nav .btn { min-height: 52px; width: 100%; }
-.onb-tertiary { background: none; border: 0; color: var(--muted); font-weight: 700; }
 @media (max-height: 460px) {
   .onb-art { display: none; }
   .onb h1 { font-size: 22px; }

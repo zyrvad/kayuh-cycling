@@ -96,7 +96,7 @@ export function Feed() {
       </ul>
       {next && (
         <div ref={sentinel}>
-          <button class="btn outline feed-more" disabled={loading} onClick={() => load(next)}>{loading ? "Loading…" : "Load more"}</button>
+          <button class="btn secondary feed-more" disabled={loading} onClick={() => load(next)}>{loading ? "Loading…" : "Load more"}</button>
         </div>
       )}
       {friendsOpen.value && <Friends onClose={() => (friendsOpen.value = false)} />}
@@ -185,7 +185,7 @@ function Friends({ onClose }: { onClose: () => void }) {
               <h2>Your follow link</h2>
               <p class="muted small">Send it to friends. Anyone with it can {info.privateAccount ? "ask to follow you" : "follow you"} once they've signed in.</p>
               <button class="btn primary" onClick={shareLink}><Share size={18} /> Share link</button>
-              <button class="link-btn" onClick={async () => {
+              <button class="btn tertiary" onClick={async () => {
                 if (!confirm("Make a new follow link? The current one will stop working. People already following you stay.")) return;
                 await act(() => api.newFollowCode(), "New link made")();
               }}>Make a new link</button>
@@ -202,8 +202,8 @@ function Friends({ onClose }: { onClose: () => void }) {
             {info.requests.length > 0 && (
               <People title="Asking to follow you" people={info.requests} actions={(p) => (
                 <>
-                  <button class="btn primary small-btn" onClick={act(() => api.acceptFollower(p.id), `${p.name} can follow you now`)}>Accept</button>
-                  <button class="btn outline small-btn" onClick={act(() => api.declineFollower(p.id))}>Decline</button>
+                  <button class="btn primary sm" onClick={act(() => api.acceptFollower(p.id), `${p.name} can follow you now`)}>Accept</button>
+                  <button class="btn secondary sm" onClick={act(() => api.declineFollower(p.id))}>Decline</button>
                 </>
               )} />
             )}
@@ -213,7 +213,7 @@ function Friends({ onClose }: { onClose: () => void }) {
               note={(p) => (info.outgoing.some((o) => o.id === p.id) ? "Waiting for them to approve" : null)}
               actions={(p) => {
                 const waiting = info.outgoing.some((o) => o.id === p.id);
-                return <button class="btn outline small-btn" onClick={async () => {
+                return <button class="btn secondary sm" onClick={async () => {
                   if (!waiting && !confirm(`Unfollow ${p.name}? You'll stop seeing rides they share with followers.`)) return;
                   await act(() => api.unfollow(p.id))();
                 }}>{waiting ? "Cancel" : "Unfollow"}</button>;
@@ -221,7 +221,7 @@ function Friends({ onClose }: { onClose: () => void }) {
 
             <People title="Followers" people={info.followers} empty="No followers yet. Share your follow link to let friends see the rides you share with them."
               actions={(p) => (
-                <button class="btn outline small-btn" onClick={async () => {
+                <button class="btn secondary sm" onClick={async () => {
                   if (!confirm(`Remove ${p.name}? They'll stop seeing rides you share with followers.`)) return;
                   await act(() => api.removeFollower(p.id))();
                 }}>Remove</button>
@@ -229,7 +229,7 @@ function Friends({ onClose }: { onClose: () => void }) {
 
             {info.suggestions.length > 0 && (
               <People title="From your crews" people={info.suggestions} actions={(p) => (
-                <button class="btn primary small-btn" onClick={act(async () => {
+                <button class="btn primary sm" onClick={act(async () => {
                   const r = await api.follow({ userId: p.id });
                   showToast(r.status === "accepted" ? `You're following ${p.name}` : `Asked to follow ${p.name}`);
                 })}>Follow</button>

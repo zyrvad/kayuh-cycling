@@ -25,12 +25,12 @@
 .fit-cursor { stroke: var(--ink); stroke-width: 1; }
 
 .tlog-toggle { width: 170px; flex-shrink: 0; }
-.tlog-toggle .seg { min-height: 32px; font-size: 13px; padding: 2px 4px; }
+.tlog-toggle .seg { min-height: 44px; font-size: 13px; padding: 2px 4px; }
 .tlog { display: flex; flex-direction: column; gap: 2px; background: var(--surface); border-radius: 14px; padding: 8px 8px 8px 10px; }
 .tlog-row { display: grid; grid-template-columns: 38px repeat(7, minmax(0, 1fr)) 62px; align-items: center; }
 .tlog-head { font-size: 11px; font-weight: 700; color: var(--muted); text-align: center; }
 .tlog-week { font-size: 11px; color: var(--muted); font-weight: 600; }
-.tlog-day-cell { height: 38px; border: 0; background: none; padding: 0; display: flex; align-items: center; justify-content: center; position: relative; }
+.tlog-day-cell { height: 44px; border: 0; background: none; padding: 0; display: flex; align-items: center; justify-content: center; position: relative; }
 .tlog-day-cell::before { content: ""; position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--line); }
 .tlog-day-cell:has(.tlog-dot)::before { display: none; }
 .tlog-day-cell.today::after { content: ""; position: absolute; inset: 2px 1px; border-radius: 10px; border: 1.5px solid var(--accent-light); }
