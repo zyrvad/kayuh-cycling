@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "./api.ts";
 import { Discover } from "./components/Discover.tsx";
 import { Onboarding, showOnboarding } from "./components/Onboarding.tsx";
+import { TourLayer } from "./components/Tour.tsx";
 import { handleFollowLink } from "./components/Feed.tsx";
 import { Plan } from "./components/Plan.tsx";
 import { Ride } from "./components/Ride.tsx";
@@ -124,6 +125,7 @@ export function App() {
       {s === "crew" && <CrewTab map={map} />}
       {s === "me" && <MeTab />}
       {showOnboarding.value && s !== "ride" && !hasActiveRide() && <Onboarding />}
+      <TourLayer />
       {toast.value && <div class="toast" role="status">{toast.value}</div>}
       {updateAvailable.value && (
         <button class="update-banner" onClick={() => location.reload()}>

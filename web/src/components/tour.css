@@ -1,0 +1,19 @@
+.tour-probe { position: fixed; left: 0; top: 0; width: 0; height: 0; visibility: hidden; pointer-events: none; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.tour-veil { position: fixed; inset: 0; z-index: 79; background: rgba(21, 32, 26, .62); }
+.tour-hole { position: fixed; left: 0; top: 0; z-index: 80; border: 2px solid var(--accent); border-radius: 14px; pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(21, 32, 26, .62); transition: transform 220ms ease, width 220ms ease, height 220ms ease; will-change: transform; }
+/* the hole paints the dim itself, so the plain veil only has to block clicks */
+.tour-veil:has(~ .tour-hole) { background: transparent; }
+.tour-tip { position: fixed; z-index: 81; width: min(320px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-y: auto; box-sizing: border-box;
+  background: var(--surface); color: var(--ink); border-radius: 18px; padding: 16px; box-shadow: 0 12px 36px rgba(21, 32, 26, .35); }
+.tour-tip h4 { margin: 0 0 6px; font-size: 17px; }
+.tour-tip p { margin: 0; font-size: 14px; line-height: 1.45; color: var(--ink-2); }
+.tour-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.tour-count { font-size: 12px; font-weight: 700; color: var(--muted); }
+.tour-btns { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.tour-btns button { min-height: 44px; padding: 0 16px; border-radius: 999px; font: 700 14px "Figtree", system-ui, sans-serif; cursor: pointer; }
+.tour-next { background: var(--accent); color: #fff; border: 1px solid var(--accent); }
+.tour-back { background: none; border: 1px solid transparent; color: var(--accent-ink); }
+.tour-skip { background: none; border: 1px solid var(--line-2); color: var(--muted); }
+@media (hover: hover) and (pointer: fine) { .tour-btns button { min-height: 36px; } }
+@media (prefers-reduced-motion: reduce) { .tour-hole { transition: none; } }

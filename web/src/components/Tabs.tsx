@@ -6,8 +6,8 @@ import {
 import { duration, km, OPERATOR_NAMES } from "../util.ts";
 import { Avatar, Page, squarePhoto, TabBar, TierBar } from "./common.tsx";
 import { showOnboarding } from "./Onboarding.tsx";
-import { Share, Trash, Watch } from "./Icons.tsx";
-import { sendSavedToWatch } from "../gpxExport.ts";
+import { More, Share, Trash, Watch } from "./Icons.tsx";
+import { RouteCard } from "./RouteCard.tsx";
 import { ShareSheet } from "./ShareSheet.tsx";
 
 export function openSaved(r: Pick<SavedRoute, "id" | "mode" | "name" | "points" | "distanceM">) {
@@ -34,35 +34,60 @@ function useLoad<T>(load: () => Promise<T>): [T | null, string | null, () => voi
 export function RoutesTab() {
   const [routes, error, reload] = useLoad(api.routes);
   const [sharing, setSharing] = useState<SavedRoute | null>(null);
+  const [menu, setMenu] = useState<SavedRoute | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const close = () => { setMenu(null); setConfirming(false); };
+  const summary = (r: SavedRoute) => `${km(r.distanceM)} km · ${duration(r.timeS)} · ${r.legs} leg${r.legs > 1 ? "s" : ""}${r.shareToken ? " · shared" : ""}`;
   return (
     <>
       <Page title="Saved routes">
         {error && <div class="banner warn">{error}</div>}
-        {routes?.length === 0 && <p class="muted">Routes you save or share show up here.</p>}
-        <ul class="list">
+        {routes?.length === 0 && (
+          <div class="rc-empty">
+            <p class="muted">Routes you save or share show up here.</p>
+            <button class="btn tertiary sm" onClick={() => { screen.value = "discover"; }}>Plan a route</button>
+          </div>
+        )}
+        <ul class="rc-list">
           {routes?.map((r) => (
-            <li key={r.id} class="list-card">
-              <button class="list-main" onClick={() => openSaved(r)}>
-                <strong>{r.name}</strong>
-                <span class="muted">{km(r.distanceM)} km · {duration(r.timeS)} · {r.legs} leg{r.legs > 1 ? "s" : ""}{r.shareToken ? " · shared" : ""}</span>
-                <TierBar tierM={r.tierM} height={6} />
-              </button>
-              <button class="mini-btn accent" aria-label={`Send ${r.name} to watch (GPX)`} title="Send to watch (GPX)"
-                onClick={() => sendSavedToWatch(r).catch((e) => showToast(e.message))}><Watch size={18} /></button>
-              <button class="mini-btn accent" aria-label={`Share ${r.name}`} onClick={() => setSharing(r)}><Share size={18} /></button>
-              <button class="mini-btn" aria-label={`Delete ${r.name}`} onClick={async () => {
-                if (!confirm(`Delete "${r.name}"?`)) return;
-                await api.deleteRoute(r.id).catch((e) => showToast(e.message));
-                reload();
-              }}><Trash /></button>
+            <li key={r.id}>
+              <RouteCard polyline={r.polyline} title={r.name} meta={summary(r)} tierM={r.tierM} onOpen={() => openSaved(r)}
+                actions={<>
+                  <button class="btn primary sm grow" onClick={() => openSaved(r)}>Ride</button>
+                  <button class="icon-btn" aria-label={`Share ${r.name}`} onClick={() => setSharing(r)}><Share size={20} /></button>
+                  <button class="icon-btn" aria-label={`More for ${r.name}`} onClick={() => setMenu(r)}><More size={20} /></button>
+                </>} />
             </li>
           ))}
         </ul>
       </Page>
       <TabBar />
+      {menu && (
+        <div class="rc-scrim" onClick={close}>
+          <div class="rc-menu" role="dialog" aria-label={menu.name} onClick={(e) => e.stopPropagation()}>
+            <h3>{menu.name}</h3>
+            {/* Plan.tsx's sendToWatch needs a planned RouteResult, so open the route and point at its To watch button. */}
+            <button class="btn secondary sm" onClick={() => { const r = menu; close(); openSaved(r); showToast("Open the route, then tap To watch"); }}><Watch /> Send to watch</button>
+            {confirming ? (
+              <>
+                <p class="muted" style={{ margin: "4px 8px" }}>Delete this route? This can't be undone.</p>
+                <button class="btn destructive sm" onClick={async () => {
+                  const r = menu; close();
+                  await api.deleteRoute(r.id).catch((e) => showToast(e.message));
+                  reload();
+                }}><Trash /> Yes, delete</button>
+                <button class="btn tertiary sm" onClick={() => setConfirming(false)}>Keep it</button>
+              </>
+            ) : (
+              <button class="btn destructive sm" onClick={() => setConfirming(true)}><Trash /> Delete</button>
+            )}
+            <button class="btn tertiary sm" onClick={close}>Cancel</button>
+          </div>
+        </div>
+      )}
       {sharing && (
         <ShareSheet name={sharing.name} routeId={async () => sharing.id} onClose={() => { setSharing(null); reload(); }}
-          summary={`${km(sharing.distanceM)} km · ${duration(sharing.timeS)} · ${sharing.legs} leg${sharing.legs > 1 ? "s" : ""}`} />
+          summary={summary(sharing)} />
       )}
     </>
   );

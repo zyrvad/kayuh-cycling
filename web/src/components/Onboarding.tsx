@@ -2,7 +2,10 @@ import { signal } from "@preact/signals";
 import { useEffect, useState } from "preact/hooks";
 import { requestCompass } from "../heading.ts";
 import { locate, settings, updateSettings, type Settings } from "../state.ts";
+import { startTour } from "../tour.ts";
+import { TOUR_KEY, tourSteps } from "../tourSteps.ts";
 import { OPERATOR_NAMES } from "../util.ts";
+import { Locate, Needle } from "./Icons.tsx";
 import "./onboarding.css";
 
 const KEY = "kayuh.onboarded";
@@ -11,90 +14,130 @@ export function isOnboarded(): boolean {
   try { return localStorage.getItem(KEY) === "1"; } catch { return false; }
 }
 
-/** True while the intro is on screen. MeTab's "Replay intro" sets it. */
+/** True while the welcome cards are on screen. MeTab's "Replay intro" sets it. */
 export const showOnboarding = signal(!isOnboarded());
-
-// Chrome on Android fires this once; keep it so the install step can offer a button.
-type InstallEvent = Event & { prompt: () => Promise<void> };
-let installEvent: InstallEvent | null = null;
-if (typeof window !== "undefined") {
-  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); installEvent = e as InstallEvent; });
-}
 
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
 const isStandalone = () => (navigator as any).standalone === true || window.matchMedia("(display-mode: standalone)").matches;
-
-type StepId = "welcome" | "bike" | "location" | "iphone" | "install" | "friends";
-
-function steps(): StepId[] {
-  const list: StepId[] = ["welcome", "bike", "location"];
-  if (isIOS()) list.push("iphone");
-  if (!isStandalone() && (isIOS() || installEvent)) list.push("install");
-  list.push("friends");
-  return list;
-}
 
 function close() {
   try { localStorage.setItem(KEY, "1"); } catch { /* storage unavailable: it will show again next time */ }
   showOnboarding.value = false;
 }
 
+const CARDS = 3;
+
 export function Onboarding() {
-  const [list] = useState(steps);
   const [i, setI] = useState(0);
-  const step = list[i];
-  const last = i === list.length - 1;
+  const last = i === CARDS - 1;
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+      else if (e.key === "ArrowRight") setI((n) => Math.min(n + 1, CARDS - 1));
+      else if (e.key === "ArrowLeft") setI((n) => Math.max(n - 1, 0));
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  const tour = () => {
+    close();
+    // let the cards unmount first so the tour measures the real screen
+    setTimeout(() => startTour(tourSteps(), { key: TOUR_KEY }), 60);
+  };
+
   return (
     <div class="onb" role="dialog" aria-modal="true" aria-label="Welcome to Kayuh">
-      <div class="onb-card">
-        <div class="onb-top">
-          <div class="onb-dots" role="img" aria-label={`Step ${i + 1} of ${list.length}`}>
-            {list.map((s, n) => <span key={s} class={n === i ? "onb-dot on" : "onb-dot"} />)}
-          </div>
-          <button class="onb-skip" onClick={close}>Skip</button>
+      <div class="onb-top">
+        <div class="onb-dots" role="img" aria-label={`Card ${i + 1} of ${CARDS}`}>
+          {Array.from({ length: CARDS }, (_, n) => <span key={n} class={n === i ? "onb-dot on" : "onb-dot"} />)}
         </div>
-        {step === "welcome" && <Welcome />}
-        {step === "bike" && <Bike />}
-        {step === "location" && <Location />}
-        {step === "iphone" && <IPhone />}
-        {step === "install" && <Install />}
-        {step === "friends" && <Friends />}
-        <div class="onb-nav">
+        <button class="onb-skip" onClick={close}>Skip</button>
+      </div>
+      <div class="onb-clip"><div class="onb-track" style={{ transform: `translateX(-${i * 100}%)` }}>
+        <Card on={i === 0} art={<ArtPaths />} title="Ride Singapore's park connectors">
+          <p>Kayuh plans routes along park connectors and cycling paths. Roads are only the last resort.</p>
+        </Card>
+        <Card on={i === 1} art={<ArtLegs />} title="30-minute legs, legal parking">
+          <p>Long rides split into legs that fit your free rental minutes. Each leg ends at LTA bike parking, so no $5 fine.</p>
+          <Bike />
+        </Card>
+        <Card on={i === 2} art={<ArtCompass />} title="Where you are and which way you face">
+          <Location />
+        </Card>
+      </div></div>
+      <div class="onb-nav">
+        {!last && <>
+          <button class="btn primary" onClick={() => setI(i + 1)}>Next</button>
           {i > 0 && <button class="btn outline" onClick={() => setI(i - 1)}>Back</button>}
-          <button class="btn primary" onClick={() => (last ? close() : setI(i + 1))}>{last ? "Start exploring" : "Next"}</button>
-        </div>
+        </>}
+        {last && <>
+          <button class="btn primary" onClick={tour}>Show me around</button>
+          <button class="btn onb-tertiary" onClick={close}>Not now</button>
+        </>}
       </div>
     </div>
   );
 }
 
-function Welcome() {
+function Card({ on, art, title, children }: { on: boolean; art: preact.ComponentChildren; title: string; children: preact.ComponentChildren }) {
   return (
-    <>
-      <h1>Welcome to Kayuh</h1>
-      <p class="muted">A cycling route planner built for Singapore.</p>
-      <ul>
-        <li>Routes stay on park connectors and cycling paths, with roads only as a last resort.</li>
-        <li>Long rides are split into legs that fit your free rental minutes.</li>
-        <li>Every stop ends at legal bike parking, so no $5 fine.</li>
-      </ul>
-    </>
+    <section class="onb-card" aria-hidden={on ? undefined : "true"} inert={!on}>
+      <div class="onb-art" aria-hidden="true">{art}</div>
+      <h1>{title}</h1>
+      {children}
+    </section>
+  );
+}
+
+function ArtPaths() {
+  return (
+    <svg viewBox="0 0 240 160" width="100%" height="100%" role="presentation">
+      <rect x="0" y="0" width="240" height="160" rx="24" fill="var(--accent-soft)" />
+      <path d="M14 128 L226 120" stroke="var(--line-2)" stroke-width="10" stroke-linecap="round" fill="none" />
+      <path d="M26 118 C70 120 70 60 112 70 S 160 128 214 38" stroke="var(--accent)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+      <path d="M26 118 C70 120 70 60 112 70 S 160 128 214 38" stroke="#fff" stroke-width="2.5" stroke-dasharray="1 9" stroke-linecap="round" fill="none" />
+      <circle cx="26" cy="118" r="10" fill="#fff" stroke="var(--accent)" stroke-width="5" />
+      <circle cx="214" cy="38" r="10" fill="var(--accent-deep)" stroke="#fff" stroke-width="4" />
+    </svg>
+  );
+}
+
+function ArtLegs() {
+  return (
+    <svg viewBox="0 0 240 160" width="100%" height="100%" role="presentation">
+      <rect x="0" y="0" width="240" height="160" rx="24" fill="var(--accent-soft)" />
+      <path d="M30 110 C 70 40, 110 140, 120 80" stroke="var(--accent)" stroke-width="10" stroke-linecap="round" fill="none" />
+      <path d="M120 80 C 135 20, 190 60, 212 44" stroke="var(--accent-deep)" stroke-width="10" stroke-linecap="round" fill="none" />
+      {[[30, 110], [120, 80], [212, 44]].map(([x, y]) => (
+        <g key={x}>
+          <circle cx={x} cy={y} r="17" fill="#fff" stroke="var(--accent)" stroke-width="4" />
+          <text x={x} y={y + 6} text-anchor="middle" font-size="18" font-weight="800" fill="var(--accent-ink)" font-family="Figtree, system-ui, sans-serif">P</text>
+        </g>
+      ))}
+      <text x="62" y="36" font-size="15" font-weight="800" fill="var(--accent-ink)" font-family="Figtree, system-ui, sans-serif">30 min</text>
+      <text x="150" y="132" font-size="15" font-weight="800" fill="var(--accent-ink)" font-family="Figtree, system-ui, sans-serif">30 min</text>
+    </svg>
+  );
+}
+
+function ArtCompass() {
+  return (
+    <svg viewBox="0 0 240 160" width="100%" height="100%" role="presentation">
+      <rect x="0" y="0" width="240" height="160" rx="24" fill="var(--accent-soft)" />
+      <circle cx="120" cy="80" r="62" fill="#fff" stroke="var(--line-2)" stroke-width="3" />
+      <circle cx="120" cy="80" r="44" fill="none" stroke="var(--accent-light)" stroke-width="2" stroke-dasharray="3 6" />
+      <text x="120" y="34" text-anchor="middle" font-size="15" font-weight="800" fill="var(--accent-ink)" font-family="Figtree, system-ui, sans-serif">N</text>
+      <g transform="translate(120 80) rotate(35) translate(-30 -30)" style={{ color: "var(--accent)" }}><Needle size={60} /></g>
+    </svg>
   );
 }
 
 function Bike() {
   const s = settings.value;
   return (
-    <>
-      <h1>Your bike</h1>
-      <p class="muted">Kayuh plans around what you ride. You can change this any time in Settings.</p>
+    <div class="onb-bike">
       <div class="segmented" role="group" aria-label="Bike">
         {(Object.keys(OPERATOR_NAMES) as Settings["operator"][]).map((o) => (
           <button key={o} class={s.operator === o ? "seg active" : "seg"} aria-pressed={s.operator === o} onClick={() => updateSettings({ operator: o })}>
@@ -102,81 +145,34 @@ function Bike() {
           </button>
         ))}
       </div>
-      {s.operator !== "own" && (
-        <label class="setting">
-          <span class="row between"><span>Free minutes per ride</span><strong>{s.capMinutes} min</strong></span>
-          <input type="range" min={15} max={60} step={5} value={s.capMinutes}
-            onInput={(e) => updateSettings({ capMinutes: Number((e.target as HTMLInputElement).value) })} />
-          <span class="muted small">Check your pass. Kayuh starts a new leg before this runs out.</span>
-        </label>
-      )}
-    </>
+      <span class="muted small">{s.operator === "own" ? "Your own bike has no time limit." : `Your pass: first ${s.capMinutes} min of each ride free. Change it in Settings.`}</span>
+    </div>
   );
 }
 
 function Location() {
-  const [state, setState] = useState<"idle" | "busy" | "ok" | "denied">("idle");
+  const [state, setState] = useState<"idle" | "busy" | "done">("idle");
+  const [loc, setLoc] = useState(false);
+  const [compass, setCompass] = useState(false);
   const allow = async () => {
     setState("busy");
-    setState((await locate()) ? "ok" : "denied");
+    // both calls start in the tap, because iOS only allows the compass prompt from a user gesture
+    const [l, c] = await Promise.all([locate().then(Boolean).catch(() => false), requestCompass().then((r) => r === "granted").catch(() => false)]);
+    setLoc(l); setCompass(c); setState("done");
   };
   return (
     <>
-      <h1>Your location</h1>
-      <p class="muted">Kayuh uses it to start routes from where you are, find parking nearby and follow you during a ride. It stays on your device.</p>
-      {state !== "ok" && <button class="btn primary" disabled={state === "busy"} onClick={allow}>{state === "busy" ? "Locating…" : "Allow location"}</button>}
-      {state === "ok" && <div class="onb-note" role="status">Location is on. You are all set.</div>}
-      {state === "denied" && <div class="onb-note" role="status">No problem. You can turn it on later in Settings.</div>}
-    </>
-  );
-}
-
-function IPhone() {
-  const [compass, setCompass] = useState<"idle" | "ok" | "no">("idle");
-  return (
-    <>
-      <h1>Riding on iPhone</h1>
-      <p class="muted">Let the map turn with you, so up on the screen is the way you are heading.</p>
-      {compass !== "ok" && <button class="btn primary" onClick={() => requestCompass().then((ok) => setCompass(ok ? "ok" : "no"))}>Let the map turn with me</button>}
-      {compass === "ok" && <div class="onb-note" role="status">The map can now turn as you ride.</div>}
-      {compass === "no" && <div class="onb-note" role="status">Compass access was not allowed. The map will stay pointing north.</div>}
-      <div class="onb-note">
-        <strong>Tip:</strong> if an "Undo Typing" popup appears while you ride, turn off Settings &gt; Accessibility &gt; Touch &gt; Shake to Undo.
-      </div>
-    </>
-  );
-}
-
-function Install() {
-  const [done, setDone] = useState(false);
-  return (
-    <>
-      <h1>Add to home screen</h1>
-      <p class="muted">Kayuh opens full screen from your home screen, like an app.</p>
-      {isIOS() ? (
-        <ol>
-          <li>Tap the Share button in Safari.</li>
-          <li>Scroll down and tap Add to Home Screen.</li>
-          <li>Tap Add.</li>
-        </ol>
-      ) : installEvent && !done ? (
-        <button class="btn primary" onClick={() => installEvent!.prompt().catch(() => {}).finally(() => { installEvent = null; setDone(true); })}>Install Kayuh</button>
-      ) : (
-        <div class="onb-note" role="status">Done. Look for Kayuh on your home screen.</div>
+      <p>Kayuh starts routes from where you are, finds parking nearby and turns the map to the way you face. Nothing leaves your device.</p>
+      {state !== "done" && <button class="btn primary" disabled={state === "busy"} onClick={allow}>{state === "busy" ? "Asking..." : "Allow location"}</button>}
+      {state === "done" && (
+        <div class="onb-note" role="status">
+          <div><Locate size={16} /> Location: {loc ? "on" : "off. Turn it on later in Settings."}</div>
+          <div>Compass: {compass ? "on" : "off. The map will point north."}</div>
+        </div>
       )}
-    </>
-  );
-}
-
-function Friends() {
-  return (
-    <>
-      <h1>Ride with friends</h1>
-      <ul>
-        <li>Make a crew, share routes with it and plan group rides together.</li>
-        <li>A group ride uses the strictest free-minutes limit among its riders.</li>
-        <li>Sign in to keep your routes and rides on every device.</li>
-      </ul>
+      {isIOS() && !isStandalone() && (
+        <div class="onb-note"><strong>Tip:</strong> tap Share, then Add to Home Screen, to open Kayuh full screen.</div>
+      )}
     </>
   );
 }

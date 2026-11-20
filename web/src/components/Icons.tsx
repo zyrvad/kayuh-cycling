@@ -53,3 +53,4 @@ export const TabRoutes = () => tabIcon(<><circle cx="6" cy="18" r="2.5" /><circl
 export const TabCrew = () => tabIcon(<><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5" /><path d="M16 4.5a3.5 3.5 0 010 7M18 14.8c1.8.8 3 2.6 3.5 5.2" /></>);
 export const TabRides = () => tabIcon(<path d="M4 19V9M10 19V5M16 19v-7M22 19H2" />);
 export const TabMe = () => tabIcon(<><circle cx="12" cy="8" r="4" /><path d="M4 21c1-4 4-6 8-6s7 2 8 6" /></>);
+export const More = ({ size = 20, ...r }: P) => <svg {...base(size, r)}><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></svg>;

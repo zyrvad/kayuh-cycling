@@ -35,7 +35,7 @@ export function TabBar() {
   return (
     <nav class="tabbar" aria-label="Main">
       {TABS.map((t) => (
-        <button key={t.id} class={screen.value === t.id ? "tab active" : "tab"} aria-current={screen.value === t.id ? "page" : undefined}
+        <button key={t.id} class={screen.value === t.id ? "tab active" : "tab"} aria-current={screen.value === t.id ? "page" : undefined} data-tour={`tab-${t.id}`}
           onClick={() => (screen.value = t.id)}>
           <t.icon />
           {t.label}
