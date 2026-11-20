@@ -15,6 +15,8 @@ import { ProfilePage } from "./components/Profile.tsx";
 import { SettingsPage } from "./components/Settings.tsx";
 import { MapView } from "./map.ts";
 import { loadActiveRide } from "./activeRide.ts";
+import { FreeRide } from "./components/FreeRide.tsx";
+import { loadFreeRide } from "./freeRide.ts";
 import { updateAvailable, watchForUpdates } from "./update.ts";
 import { router, routerReady } from "./routerClient.ts";
 import {
@@ -39,7 +41,7 @@ export function App() {
       results.value = [active.route];
       selected.value = 0;
       screen.value = "ride";
-    }
+    } else if (loadFreeRide()) screen.value = "freeride";
     watchForUpdates();
     refreshMe();
     // ?debug exposes internals for poking at from the browser console.
@@ -126,6 +128,7 @@ export function App() {
       {s === "routes" && <RoutesTab />}
       {s === "rides" && <RidesTab map={map} />}
       {s === "crew" && <CrewTab map={map} />}
+      {s === "freeride" && <FreeRide map={map} />}
       {s === "home" && <Home />}
       {s === "me" && <ProfilePage />}
       {s === "settings" && <SettingsPage />}

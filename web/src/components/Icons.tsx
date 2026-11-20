@@ -61,3 +61,5 @@ export const Gear = ({ size = 22, ...r }: P) => <svg {...base(size, r)} stroke-w
 export const Upload = ({ size = 20, ...r }: P) => <svg {...base(size, r)}><path d="M12 15V4" /><path d="M7 8.5L12 4l5 4.5" /><path d="M4 15v3.5A1.5 1.5 0 005.5 20h13a1.5 1.5 0 001.5-1.5V15" /></svg>;
 export const Cloud = ({ size = 18, ...r }: P) => <svg {...base(size, r)}><path d="M7 18a4.5 4.5 0 01-.5-8.97A6 6 0 0118 10.5 3.75 3.75 0 0117.25 18H7z" /></svg>;
 export const CloudRain = ({ size = 18, ...r }: P) => <svg {...base(size, r)}><path d="M7 15a4.5 4.5 0 01-.5-8.97A6 6 0 0118 7.5 3.75 3.75 0 0117.25 15H7z" /><path d="M8 18.5l-1 2M12 18.5l-1 2M16 18.5l-1 2" /></svg>;
+export const Pause = ({ size = 20, ...r }: P) => <svg {...base(size, r)}><path d="M8 5v14M16 5v14" stroke-width="3" /></svg>;
+export const Play = ({ size = 20, ...r }: P) => <svg {...base(size, r)}><path d="M7 4l13 8-13 8z" /></svg>;

@@ -1,0 +1,15 @@
+/* Free ride: reuses .ride-card / .raised-card / .timer / .ride-stats from styles.css. */
+.fr-card.ride-card { bottom: calc(16px + var(--safe-bottom)); gap: 14px; }
+.fr-title { font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
+.fr-sub { font-size: 15px; color: var(--muted); }
+.fr-main { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.fr-paused { font-size: 13px; font-weight: 700; color: var(--warn); background: var(--warn-soft); border-radius: 999px; padding: 4px 10px; }
+.fr-free { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 15px; font-weight: 600; }
+.fr-free b { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.fr-free.warn, .fr-free.warn b { color: var(--warn); }
+.fr-park { font-size: 15px; font-weight: 600; }
+.fr-row { display: flex; gap: 10px; }
+.fr-row .btn { flex: 1; }
+.fr-confirm { display: flex; flex-direction: column; gap: 10px; }
+.fr-confirm strong { font-size: 17px; }
+.fr-notice { font-size: 15px; font-weight: 600; color: var(--warn); }
