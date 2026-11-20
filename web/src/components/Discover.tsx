@@ -67,7 +67,7 @@ export function Discover({ map }: { map: MapView | null }) {
           <button class="searchbox as-button" onClick={openSearch}>
             <Search /> <span class="placeholder">Where to? Place or postal code</span>
           </button>
-          <button class="icon-btn raised profile" aria-label="Settings and profile" onClick={() => (screen.value = "me")}>
+          <button class="icon-btn raised profile" aria-label="Settings and profile" data-tour="profile" onClick={() => (screen.value = "me")}>
             <Avatar name={me.value?.displayName || me.value?.email || "Me"} url={me.value?.avatar} />
           </button>
         </div>

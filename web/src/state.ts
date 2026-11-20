@@ -124,8 +124,8 @@ export function openGroupRide(id: string) {
 
 // ------------------------------------------------------------------ navigation
 
-export type Screen = "discover" | "plan" | "ride" | "routes" | "rides" | "crew" | "me";
-export const screen = signal<Screen>("discover");
+export type Screen = "home" | "settings" | "freeride" | "discover" | "plan" | "ride" | "routes" | "rides" | "crew" | "me";
+export const screen = signal<Screen>("home");
 /** The ride open on the Rides tab's detail page, if any. */
 export const rideDetail = signal<{ id: string; crew?: boolean; back?: Screen } | null>(null);
 

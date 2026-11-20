@@ -1,9 +1,9 @@
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { authHeaders } from "../api.ts";
-import { mapBearing, screen, type Screen } from "../state.ts";
+import { me, mapBearing, screen, type Screen } from "../state.ts";
 import { TIER_COLORS, TIER_SHORT } from "../util.ts";
-import { Needle, TabCrew, TabMap, TabMe, TabRides, TabRoutes } from "./Icons.tsx";
+import { Back, Needle, TabCrew, TabHome, TabMap, TabMe, TabRides, TabRoutes } from "./Icons.tsx";
 
 export function TierBar({ tierM, height = 10, labels = false }: { tierM: number[]; height?: number; labels?: boolean }) {
   const total = tierM.reduce((a, b) => a + b, 0) || 1;
@@ -24,11 +24,11 @@ export function TierBar({ tierM, height = 10, labels = false }: { tierM: number[
 }
 
 const TABS: { id: Screen; label: string; icon: () => preact.JSX.Element }[] = [
+  { id: "home", label: "Home", icon: TabHome },
   { id: "discover", label: "Map", icon: TabMap },
   { id: "routes", label: "Routes", icon: TabRoutes },
-  { id: "crew", label: "Crew", icon: TabCrew },
   { id: "rides", label: "Rides", icon: TabRides },
-  { id: "me", label: "Me", icon: TabMe },
+  { id: "crew", label: "Crew", icon: TabCrew },
 ];
 
 export function TabBar() {
@@ -45,10 +45,30 @@ export function TabBar() {
   );
 }
 
-export function Page({ title, children }: { title: string; children: ComponentChildren }) {
+export function Page({ title, children, back, actions, profile = true }: {
+  title: string; children: ComponentChildren; back?: () => void; actions?: ComponentChildren; profile?: boolean;
+}) {
+  const m = me.value;
+  const right = actions ?? (profile ? (
+    <button class="icon-btn profile" aria-label="Profile" data-tour="profile" onClick={() => (screen.value = "me")}>
+      <Avatar name={m?.displayName || m?.email || "Me"} url={m?.avatar} />
+    </button>
+  ) : null);
+  if (!back && !right) {
+    return (
+      <section class="page" aria-label={title}>
+        <h1>{title}</h1>
+        {children}
+      </section>
+    );
+  }
   return (
     <section class="page" aria-label={title}>
-      <h1>{title}</h1>
+      <div class="page-head">
+        {back && <button class="icon-btn" aria-label="Back" onClick={back}><Back /></button>}
+        <h1>{title}</h1>
+        {right}
+      </div>
       {children}
     </section>
   );

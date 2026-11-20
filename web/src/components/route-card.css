@@ -1,9 +1,3 @@
-.btn.sm { height: 44px; border-radius: 12px; font-size: 14px; padding: 0 14px; }
-.btn.secondary { background: var(--surface); border: 1px solid var(--line-2); color: var(--ink); }
-.btn.tertiary { background: transparent; color: var(--accent-deep); }
-.btn.destructive { background: transparent; color: var(--danger, #B42318); }
-.btn.destructive:active { background: var(--danger-soft, #FEF3F2); }
-.btn:active, .icon-btn:active { transform: scale(0.98); }
 
 .route-card { position: relative; background: var(--surface); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; list-style: none; }
 .rc-open { display: block; width: 100%; padding: 8px 8px 0; border: 0; background: none; text-align: left; color: inherit; font: inherit; }

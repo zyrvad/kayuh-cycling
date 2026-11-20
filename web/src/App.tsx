@@ -1,6 +1,7 @@
 import { effect } from "@preact/signals";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { api } from "./api.ts";
+import { Home } from "./components/Home.tsx";
 import { Discover } from "./components/Discover.tsx";
 import { Onboarding, showOnboarding } from "./components/Onboarding.tsx";
 import { TourLayer } from "./components/Tour.tsx";
@@ -123,7 +124,8 @@ export function App() {
       {s === "routes" && <RoutesTab />}
       {s === "rides" && <RidesTab map={map} />}
       {s === "crew" && <CrewTab map={map} />}
-      {s === "me" && <MeTab />}
+      {s === "home" && <Home />}
+      {(s === "me" || s === "settings") && <MeTab />}
       {showOnboarding.value && s !== "ride" && !hasActiveRide() && <Onboarding />}
       <TourLayer />
       {toast.value && <div class="toast" role="status">{toast.value}</div>}
