@@ -1,0 +1,658 @@
+[
+ {
+  "name": "01-launch",
+  "steps": [
+   {
+    "goto": "/?splash=hold"
+   },
+   {
+    "wait": 1500
+   }
+  ]
+ },
+ {
+  "name": "01b-welcome-1",
+  "steps": [
+   {
+    "localStorage": {
+     "kayuh.onboarded": null
+    }
+   },
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1200
+   },
+   {
+    "wait": 500
+   }
+  ]
+ },
+ {
+  "name": "01c-welcome-2",
+  "steps": [
+   {
+    "localStorage": {
+     "kayuh.onboarded": null
+    }
+   },
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1200
+   },
+   {
+    "clickText": "Next"
+   },
+   {
+    "wait": 700
+   },
+   {
+    "wait": 500
+   }
+  ]
+ },
+ {
+  "name": "01d-welcome-3",
+  "steps": [
+   {
+    "localStorage": {
+     "kayuh.onboarded": null
+    }
+   },
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1200
+   },
+   {
+    "clickText": "Next"
+   },
+   {
+    "wait": 700
+   },
+   {
+    "clickText": "Next"
+   },
+   {
+    "wait": 700
+   },
+   {
+    "wait": 500
+   }
+  ]
+ },
+ {
+  "name": "01e-tour-home",
+  "steps": [
+   {
+    "localStorage": {
+     "kayuh.onboarded": null
+    }
+   },
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1200
+   },
+   {
+    "clickText": "Next"
+   },
+   {
+    "wait": 700
+   },
+   {
+    "clickText": "Next"
+   },
+   {
+    "wait": 700
+   },
+   {
+    "wait": 500
+   },
+   {
+    "clickText": "Show me around"
+   },
+   {
+    "wait": 1800
+   }
+  ]
+ },
+ {
+  "name": "02-home",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "wait": 1500
+   }
+  ]
+ },
+ {
+  "name": "03-map-half",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": "[data-tour=tab-discover]"
+   },
+   {
+    "waitFor": ".sheet-grip"
+   },
+   {
+    "wait": 6000
+   }
+  ]
+ },
+ {
+  "name": "03b-map-collapsed",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": "[data-tour=tab-discover]"
+   },
+   {
+    "waitFor": ".sheet-grip"
+   },
+   {
+    "wait": 2500
+   },
+   {
+    "click": ".sheet-grip"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": ".sheet-grip"
+   },
+   {
+    "wait": 500
+   }
+  ]
+ },
+ {
+  "name": "03c-map-full",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": "[data-tour=tab-discover]"
+   },
+   {
+    "waitFor": ".sheet-grip"
+   },
+   {
+    "wait": 2500
+   },
+   {
+    "click": ".sheet-grip"
+   },
+   {
+    "wait": 1500
+   }
+  ]
+ },
+ {
+  "name": "03d-map-conditions",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": "[data-tour=tab-discover]"
+   },
+   {
+    "waitFor": ".cond-pill"
+   },
+   {
+    "wait": 5000
+   },
+   {
+    "click": ".cond-pill"
+   },
+   {
+    "wait": 1200
+   }
+  ]
+ },
+ {
+  "name": "04-plan-route",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": "[data-tour=tab-routes]"
+   },
+   {
+    "wait": 2500
+   },
+   {
+    "clickText": "Bishan-Ang Mo Kio Park loop"
+   },
+   {
+    "wait": 9000
+   }
+  ]
+ },
+ {
+  "name": "05-routes",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": "[data-tour=tab-routes]"
+   },
+   {
+    "wait": 6500
+   }
+  ]
+ },
+ {
+  "name": "05b-routes-more",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": "[data-tour=tab-routes]"
+   },
+   {
+    "wait": 5000
+   },
+   {
+    "click": "[aria-label^='More for']"
+   },
+   {
+    "wait": 1200
+   }
+  ]
+ },
+ {
+  "name": "06-rides-mine",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": "[data-tour=tab-rides]"
+   },
+   {
+    "waitFor": ".stat-tiles"
+   },
+   {
+    "wait": 3500
+   }
+  ]
+ },
+ {
+  "name": "07-rides-training",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": "[data-tour=tab-rides]"
+   },
+   {
+    "waitFor": ".rides-switch"
+   },
+   {
+    "clickText": "Training"
+   },
+   {
+    "wait": 3500
+   }
+  ]
+ },
+ {
+  "name": "08-rides-crew",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": "[data-tour=tab-rides]"
+   },
+   {
+    "waitFor": ".rides-switch"
+   },
+   {
+    "clickText": "Crew"
+   },
+   {
+    "wait": 3500
+   }
+  ]
+ },
+ {
+  "name": "09-ride-detail",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": "[data-tour=tab-rides]"
+   },
+   {
+    "waitFor": ".stat-tiles"
+   },
+   {
+    "wait": 2500
+   },
+   {
+    "clickText": "Sunrise at East Coast Park"
+   },
+   {
+    "wait": 7000
+   }
+  ]
+ },
+ {
+  "name": "10-crew-feed",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": "[data-tour=tab-crew]"
+   },
+   {
+    "wait": 4000
+   }
+  ]
+ },
+ {
+  "name": "11-crew-list",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": "[data-tour=tab-crew]"
+   },
+   {
+    "waitFor": "[data-tour=crew-crews]"
+   },
+   {
+    "click": "[data-tour=crew-crews]"
+   },
+   {
+    "wait": 3000
+   }
+  ]
+ },
+ {
+  "name": "12-crew-detail",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": "[data-tour=tab-crew]"
+   },
+   {
+    "waitFor": "[data-tour=crew-crews]"
+   },
+   {
+    "click": "[data-tour=crew-crews]"
+   },
+   {
+    "waitFor": ".list-card"
+   },
+   {
+    "clickText": "Sunday Kakis"
+   },
+   {
+    "wait": 3500
+   }
+  ]
+ },
+ {
+  "name": "12b-crew-settings",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": "[data-tour=tab-crew]"
+   },
+   {
+    "waitFor": "[data-tour=crew-crews]"
+   },
+   {
+    "click": "[data-tour=crew-crews]"
+   },
+   {
+    "waitFor": ".list-card"
+   },
+   {
+    "clickText": "Sunday Kakis"
+   },
+   {
+    "wait": 3500
+   },
+   {
+    "click": "[aria-label='Crew settings']"
+   },
+   {
+    "wait": 1000
+   }
+  ]
+ },
+ {
+  "name": "12c-crew-leave-confirm",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": "[data-tour=tab-crew]"
+   },
+   {
+    "waitFor": "[data-tour=crew-crews]"
+   },
+   {
+    "click": "[data-tour=crew-crews]"
+   },
+   {
+    "waitFor": ".list-card"
+   },
+   {
+    "clickText": "Sunday Kakis"
+   },
+   {
+    "wait": 3500
+   },
+   {
+    "click": "[aria-label='Crew settings']"
+   },
+   {
+    "wait": 1000
+   },
+   {
+    "clickText": "Leave crew"
+   },
+   {
+    "wait": 800
+   }
+  ]
+ },
+ {
+  "name": "13-profile-top",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": "[aria-label=Profile]"
+   },
+   {
+    "wait": 2500
+   }
+  ]
+ },
+ {
+  "name": "14-profile-scrolled",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": "[aria-label=Profile]"
+   },
+   {
+    "wait": 2500
+   },
+   {
+    "scroll": {
+     "selector": ".page",
+     "y": "end"
+    }
+   },
+   {
+    "wait": 800
+   }
+  ]
+ },
+ {
+  "name": "15-settings-top",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": "[aria-label=Profile]"
+   },
+   {
+    "wait": 2000
+   },
+   {
+    "click": "[data-tour=settings-link]"
+   },
+   {
+    "wait": 2000
+   }
+  ]
+ },
+ {
+  "name": "16-settings-bottom",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "click": "[aria-label=Profile]"
+   },
+   {
+    "wait": 2000
+   },
+   {
+    "click": "[data-tour=settings-link]"
+   },
+   {
+    "wait": 2000
+   },
+   {
+    "scroll": {
+     "selector": ".page",
+     "y": "end"
+    }
+   },
+   {
+    "wait": 800
+   }
+  ]
+ },
+ {
+  "name": "17-free-ride",
+  "steps": [
+   {
+    "goto": "/"
+   },
+   {
+    "wait": 1500
+   },
+   {
+    "clickText": "Free ride"
+   },
+   {
+    "wait": 9000
+   }
+  ]
+ }
+]
