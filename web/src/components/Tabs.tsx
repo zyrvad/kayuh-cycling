@@ -5,6 +5,7 @@ import { duration, km } from "../util.ts";
 import { Page, TabBar } from "./common.tsx";
 import { More, Share, Trash, Watch } from "./Icons.tsx";
 import { RouteCard } from "./RouteCard.tsx";
+import { sendSavedToWatch } from "../gpxExport.ts";
 import { ShareSheet } from "./ShareSheet.tsx";
 
 export function openSaved(r: Pick<SavedRoute, "id" | "mode" | "name" | "points" | "distanceM">) {
@@ -63,8 +64,7 @@ export function RoutesTab() {
         <div class="rc-scrim" onClick={close}>
           <div class="rc-menu" role="dialog" aria-label={menu.name} onClick={(e) => e.stopPropagation()}>
             <h3>{menu.name}</h3>
-            {/* Plan.tsx's sendToWatch needs a planned RouteResult, so open the route and point at its To watch button. */}
-            <button class="btn secondary sm" onClick={() => { const r = menu; close(); openSaved(r); showToast("Open the route, then tap To watch"); }}><Watch /> Send to watch</button>
+            <button class="btn secondary sm" onClick={() => { const r = menu; close(); sendSavedToWatch(r).catch((e) => showToast(e.message)); }}><Watch /> Send to watch</button>
             {confirming ? (
               <>
                 <p class="muted" style={{ margin: "4px 8px" }}>Delete this route? This can't be undone.</p>

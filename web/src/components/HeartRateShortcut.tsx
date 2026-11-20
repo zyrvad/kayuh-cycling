@@ -92,7 +92,7 @@ export function AddHeartRate({ ride, samples, onSaved }: {
   );
 }
 
-function ShortcutHelp({ onClose, onRun }: { onClose: () => void; onRun: () => void }) {
+export function ShortcutHelp({ onClose, onRun }: { onClose: () => void; onRun?: () => void }) {
   return (
     <div class="sheet-full" role="dialog" aria-label="Set up the Apple Health shortcut">
       <div class="search-head">
@@ -110,7 +110,7 @@ function ShortcutHelp({ onClose, onRun }: { onClose: () => void; onRun: () => vo
           <li><b>Copy to Clipboard</b> the combined text, then <b>Show Notification</b> "Heart rate sent".</li>
         </ol>
         <p class="muted small">The upload only works once the Cloudflare Access bypass for /api/hr/ is in place. Until then, switch back here and tap Paste heart rate: the clipboard copy works either way. Full steps are in docs/SHORTCUT.md.</p>
-        <button class="btn primary" onClick={onRun}>I've set it up: run it now</button>
+        {onRun && <button class="btn primary" onClick={onRun}>I've set it up: run it now</button>}
         <button class="btn outline" onClick={onClose}>Close</button>
       </div>
     </div>

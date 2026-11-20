@@ -6,6 +6,7 @@ import { Avatar, Page, squarePhoto, TabBar } from "./common.tsx";
 import { showOnboarding } from "./Onboarding.tsx";
 import { startTour } from "../tour.ts";
 import { TOUR_KEY, tourSteps } from "../tourSteps.ts";
+import { ShortcutHelp } from "./HeartRateShortcut.tsx";
 import "./profile.css";
 
 function Slider({ label, k, min, max, step, format }: { label: string; k: keyof Settings; min: number; max: number; step: number; format: (v: number) => string }) {
@@ -20,6 +21,7 @@ function Slider({ label, k, min, max, step, format }: { label: string; k: keyof 
 }
 
 export function SettingsPage() {
+  const [shortcutHelp, setShortcutHelp] = useState(false);
   const s = settings.value;
   const info = routerInfo.value;
   const aversion = (v: number) => (v < 0.25 ? "Don't mind" : v < 0.6 ? "Avoid a bit" : v < 0.85 ? "Avoid" : "Avoid hard");
@@ -62,7 +64,12 @@ export function SettingsPage() {
           <h2>Heart rate &amp; power</h2>
           <BodySettings />
         </section>
-        {/* Apple Health shortcut row goes here (added on main by the heart-rate work) */}
+        <section class="group">
+          <h2>Apple Health heart rate</h2>
+          <p class="muted small">An iPhone shortcut brings your watch's heart rate onto a ride. Set it up once, then tap Add heart rate on a ride.</p>
+          <button class="btn secondary sm" onClick={() => setShortcutHelp(true)}>Set up the shortcut</button>
+          {shortcutHelp && <ShortcutHelp onClose={() => setShortcutHelp(false)} />}
+        </section>
         <section class="group">
           <h2>Privacy</h2>
           <PrivateToggle />
