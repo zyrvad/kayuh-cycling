@@ -38,6 +38,8 @@ export function hashCoords(coords: LonLat[], width = SNAP_W, height = SNAP_H): s
 const mem = new Map<string, string>();
 const MEM_MAX = 60;
 let queue: Promise<unknown> = Promise.resolve();
+let rigFailedAt = 0;
+const RIG_BACKOFF_MS = 60_000;
 let rig: { map: import("maplibre-gl").Map; el: HTMLElement } | null = null;
 
 async function getRig(w: number, h: number) {
@@ -52,7 +54,13 @@ async function getRig(w: number, h: number) {
     container: el, style: STYLE, interactive: false, attributionControl: false, fadeDuration: 0,
     canvasContextAttributes: { preserveDrawingBuffer: true }, pixelRatio: 2, center: [103.82, 1.35], zoom: 10,
   } as ConstructorParameters<typeof maplibregl.Map>[0]);
-  await new Promise<void>((res, rej) => { map.once("load", () => res()); map.once("error", (e) => rej(e.error ?? e)); });
+  try {
+    await new Promise<void>((res, rej) => { map.once("load", () => res()); map.once("error", (e) => rej(e.error ?? e)); });
+  } catch (err) {
+    map.remove();
+    el.remove();
+    throw err;
+  }
   const empty = { type: "FeatureCollection" as const, features: [] };
   map.addSource("snap-line", { type: "geojson", data: empty });
   map.addSource("snap-pts", { type: "geojson", data: empty });
@@ -101,7 +109,11 @@ export function snapshot(coords: LonLat[], opts: SnapshotOpts = {}): Promise<str
   const job = queue.then(async () => {
     if (mem.get(key)) return mem.get(key)!;
     let blob = await cacheGet(key);
-    if (!blob) { blob = await render(coords, w, h); void cachePut(key, blob); }
+    if (!blob) {
+      if (!rig && Date.now() - rigFailedAt < RIG_BACKOFF_MS) return null;
+      try { blob = await render(coords, w, h); } catch (e) { if (!rig) rigFailedAt = Date.now(); throw e; }
+      void cachePut(key, blob);
+    }
     const url = URL.createObjectURL(blob);
     if (mem.size >= MEM_MAX) { const old = mem.keys().next().value!; URL.revokeObjectURL(mem.get(old)!); mem.delete(old); }
     mem.set(key, url);

@@ -8,6 +8,6 @@ import "./styles.css";
 render(<App />, document.getElementById("app")!);
 
 trackLaunch({
-  graph: { onProgress: onRouterProgress, done: routerReady.then(() => undefined) },
+  graph: { onProgress: onRouterProgress, done: routerReady.then(() => undefined, () => undefined) },
   map: { done: firstMapLoad },
 });

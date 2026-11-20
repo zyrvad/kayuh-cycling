@@ -7,7 +7,10 @@ const worker = new Worker(new URL("./router.worker.ts", import.meta.url), { type
 const pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>();
 let nextId = 1;
 let readyResolve: (info: { nodes: number; built: string }) => void;
-export const routerReady = new Promise<{ nodes: number; built: string }>((r) => (readyResolve = r));
+let readyReject: (e: Error) => void;
+/** Resolves when the graph is loaded; rejects if loading failed. */
+export const routerReady = new Promise<{ nodes: number; built: string }>((res, rej) => { readyResolve = res; readyReject = rej; });
+routerReady.catch(() => {});
 
 const progressListeners = new Set<(f: number) => void>();
 /** Graph download progress, 0..1 (clamped below 1 until the router is ready). Returns an unsubscribe. */
@@ -24,6 +27,12 @@ worker.onmessage = (e) => {
     return;
   }
   if (d.type === "ready") return readyResolve(d);
+  if (d.type === "error") {
+    readyReject(new Error(d.message));
+    pending.forEach((p) => p.reject(new Error(d.message)));
+    pending.clear();
+    return;
+  }
   const p = pending.get(d.id);
   if (!p) return;
   pending.delete(d.id);

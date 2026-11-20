@@ -24,6 +24,7 @@ const GRAPH_RAW_BYTES_FALLBACK = 12_608_968; // same file after gunzip
 /** Fetch the gzipped graph, counting compressed bytes as they stream so the launch screen can show real progress. */
 async function loadGraph(): Promise<ArrayBuffer> {
   const r = await fetch("/data/graph.bin.gz");
+  if (!r.ok || !r.body) throw new Error(`Graph download failed (${r.status})`);
   const header = Number(r.headers.get("content-length"));
   // Some servers (the Vite dev server) send the .gz with Content-Encoding: gzip, so the browser has already
   // gunzipped it: the bytes we count are then raw ones and we must not decompress again.
@@ -53,12 +54,14 @@ async function loadGraph(): Promise<ArrayBuffer> {
 const ready = (async () => {
   const [g, p] = await Promise.all([
     loadGraph(),
-    fetch("/data/pois.json").then((r) => r.json()),
+    fetch("/data/pois.json").then((r) => { if (!r.ok) throw new Error(`POI download failed (${r.status})`); return r.json(); }),
   ]);
   pois = p.pois;
   ctx = createContext(parseGraph(g), new PoiIndex(pois));
   postMessage({ type: "ready", nodes: ctx.graph.nodeCount, built: p.built });
-})();
+})().catch((e) => {
+  postMessage({ type: "error", message: e instanceof Error ? e.message : String(e) });
+});
 
 function handle(msg: WorkerRequest): unknown {
   const c = ctx!;

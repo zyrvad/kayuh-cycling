@@ -289,7 +289,7 @@ function CrewPage({ id }: { id: string }) {
                 <p class="crew-sheet-note">Leave {crew.name}? You'll stop seeing its rides and group rides.</p>
                 <button class="btn secondary sm" onClick={() => setConfirming(false)}>Cancel</button>
                 <button class="btn destructive sm crew-leave" onClick={async () => {
-                  await api.leaveCrew(id).catch((e) => showToast(e.message));
+                  try { await api.leaveCrew(id); } catch (e) { showToast(e instanceof Error ? e.message : "Couldn't leave the crew"); return; }
                   closeMenu();
                   crewView.value = { kind: "list" };
                 }}>Leave</button>

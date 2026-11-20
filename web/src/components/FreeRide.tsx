@@ -7,7 +7,7 @@ import {
 } from "../freeRide.ts";
 import type { MapView } from "../map.ts";
 import { router, type NearbyParking } from "../routerClient.ts";
-import { cap, openRide, refreshPace, screen, showToast } from "../state.ts";
+import { cap, openRide, refreshPace, rideDetail, screen, showToast } from "../state.ts";
 import { analyse, summary, TrackRecorder } from "../track.ts";
 import { clock, encodePolyline, km } from "../util.ts";
 import { Pause, Play } from "./Icons.tsx";
@@ -17,12 +17,14 @@ const SAVE_EVERY_MS = 10_000;
 type Mode = "idle" | "riding" | "confirm" | "discard" | "saving";
 
 export function FreeRide({ map }: { map: MapView | null }) {
-  const resumed = useRef(loadFreeRide());
-  const st = useRef<FreeRideState | null>(resumed.current);
-  const rec = useRef<TrackRecorder | null>(resumed.current ? new TrackRecorder(resumed.current.startedAt, resumed.current.track) : null);
+  const [resumed] = useState(() => loadFreeRide());
+  const st = useRef<FreeRideState | null>(resumed);
+  const rec = useRef<TrackRecorder | null>(null);
+  if (rec.current === null && resumed && st.current === resumed) rec.current = new TrackRecorder(resumed.startedAt, resumed.track);
+  const saving = useRef(false);
   const mapRef = useRef(map);
   mapRef.current = map;
-  const [mode, setMode] = useState<Mode>(resumed.current ? "riding" : "idle");
+  const [mode, setMode] = useState<Mode>(resumed ? "riding" : "idle");
   const [now, setNow] = useState(Date.now());
   const [kmh, setKmh] = useState(0);
   const [parking, setParking] = useState<NearbyParking | null | "none">(null);
@@ -89,8 +91,18 @@ export function FreeRide({ map }: { map: MapView | null }) {
   useEffect(() => {
     if (mode !== "riding" && mode !== "confirm") return;
     let lock: { release: () => Promise<void> } | null = null, gone = false;
-    (navigator as any).wakeLock?.request("screen").then((l: typeof lock) => { if (gone) l?.release().catch(() => {}); else lock = l; }).catch(() => {});
-    return () => { gone = true; lock?.release().catch(() => {}); };
+    const acquire = () => {
+      if (gone || lock) return;
+      (navigator as any).wakeLock?.request("screen").then((l: NonNullable<typeof lock> & { addEventListener?: (t: string, f: () => void) => void }) => {
+        if (gone) { l?.release().catch(() => {}); return; }
+        lock = l;
+        l?.addEventListener?.("release", () => { if (lock === l) lock = null; });
+      }).catch(() => {});
+    };
+    const onVisible = () => { if (document.visibilityState === "visible") acquire(); };
+    acquire();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { gone = true; document.removeEventListener("visibilitychange", onVisible); lock?.release().catch(() => {}); };
   }, [mode === "riding" || mode === "confirm"]);
 
   const start = () => {
@@ -126,11 +138,12 @@ export function FreeRide({ map }: { map: MapView | null }) {
 
   const save = async () => {
     const s = st.current, r = rec.current;
-    if (!s || !r) return;
+    if (!s || !r || saving.current) return;
     const t = Date.now();
     const a = r.samples.length >= 2 ? analyse(r.samples, r.legStarts) : null;
     const distanceM = Math.round(a?.distanceM ?? s.distanceM);
     if (!a || tooShort(distanceM)) { setShort(true); setMode("riding"); return; }
+    saving.current = true;
     setMode("saving");
     try {
       // Path types for the line you rode: classify each (thinned) point, share each step's distance out by tier.
@@ -157,9 +170,12 @@ export function FreeRide({ map }: { map: MapView | null }) {
       refreshPace();
       showToast("Ride saved (private)");
       openRide(id);
+      if (rideDetail.value) rideDetail.value = { ...rideDetail.value, back: "home" };
     } catch (e) {
       showToast(`Couldn't save: ${e instanceof Error ? e.message : "offline?"}. Your ride is kept: try Finish again.`);
       setMode("confirm");
+    } finally {
+      saving.current = false;
     }
   };
 
@@ -211,7 +227,7 @@ export function FreeRide({ map }: { map: MapView | null }) {
           <div class="fr-confirm">
             <strong>Finish and save this ride?</strong>
             <div class="fr-row">
-              <button class="btn primary" onClick={save}>Save</button>
+              <button class="btn primary" disabled={mode !== "confirm"} onClick={save}>Save</button>
               <button class="btn secondary" onClick={() => setMode("riding")}>Keep riding</button>
             </div>
             <button class="btn destructive" onClick={() => setMode("discard")}>Discard ride</button>

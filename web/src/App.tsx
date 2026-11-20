@@ -50,7 +50,7 @@ export function App() {
     routerReady.then((info) => {
       routerInfo.value = info;
       router.pois().then((p) => m.setPois(p));
-    });
+    }).catch(() => showToast("Couldn't load Singapore's paths. Check your connection, then reload."));
     m.onTap = (ll) => {
       const i = pickIndex.value;
       if (i === null || screen.value !== "plan") return false;
