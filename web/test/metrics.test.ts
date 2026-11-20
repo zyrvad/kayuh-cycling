@@ -128,3 +128,36 @@ test("speed by path type counts all steps on a tier, so it matches the tier bar"
   const a = analyse(s);
   assert.ok(a.byTier[0] && a.byTier[0].distanceM > 500);
 });
+
+// ------------------------------------------------------------------ tier distances and short rides
+
+test("tier bar and per-tier list share one computation, even with gaps over 60 s and several tiers", () => {
+  const tiers = [0, 0, 0, 1, 1, 2, 3, 3, 4, 5, 5, 0, 0, 2, 2, 3, -1, -1, 1, 1];
+  let t = 0;
+  const samples: Sample[] = tiers.map((tier, i) => {
+    t += i === 6 || i === 13 ? 120 : 5; // two gaps longer than 60 s
+    return { ll: [103.8 + i * 0.0003, 1.3] as [number, number], t, alt: null, kmh: 18, tier, hr: null, cad: null, power: null };
+  });
+  const a = analyse(samples);
+  assert.equal(a.tierM.length, 6);
+  // Every tier that has distance is in the list, and the list matches the bar per tier.
+  for (let tier = 0; tier < 6; tier++) {
+    const row = a.byTier.find((r) => r.tier === tier);
+    if (a.tierM[tier] > 0) assert.equal(row?.distanceM, a.tierM[tier], `tier ${tier}`);
+    else assert.equal(row, undefined);
+  }
+  const listSum = a.byTier.reduce((s, r) => s + r.distanceM, 0);
+  assert.ok(Math.abs(listSum - a.tierM.reduce((s, m) => s + m, 0)) < 1e-6);
+  assert.ok(a.byTier.length >= 5);
+  assert.ok(listSum > 0 && listSum <= a.distanceM + 1e-6);
+});
+
+test("very short ride: average speed is sane and never above the top speed", () => {
+  // ~200 m covered in 9 s of recorded time (GPS jitter) would read as 80 km/h.
+  const samples: Sample[] = Array.from({ length: 10 }, (_, i) => ({
+    ll: [103.8 + i * 0.0002, 1.3] as [number, number], t: i, alt: null, kmh: null, tier: 0, hr: null, cad: null, power: null,
+  }));
+  const a = analyse(samples);
+  assert.ok(a.avgKmh <= 60);
+  assert.ok(a.maxKmh >= a.avgKmh);
+});

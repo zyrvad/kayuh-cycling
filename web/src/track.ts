@@ -86,6 +86,7 @@ export const BEST_LABEL: Record<BestKey, string> = { 400: "400 m", 1000: "1 km",
 const MIN_STEP_M = 4;         // ignore GPS wobble when standing still
 const MAX_GAP_S = 5;          // ...but keep at least one sample this often
 const MOVING_KMH = 3;         // slower than this is stopped (walking the bike counts as stopped)
+const MIN_MOVING_S = 15;      // floor for average speed on very short rides
 const STOP_S = 30;            // a pause this long is a stop
 const MAX_PLAUSIBLE_KMH = 60; // GPS jumps faster than this are noise
 
@@ -181,6 +182,8 @@ export interface Analysis extends RideStats {
   splits: { km: number; distanceM: number; movingS: number; kmh: number; elevM: number | null }[];
   /** Distance and average moving speed on each path type. */
   byTier: { tier: number; distanceM: number; kmh: number }[];
+  /** Distance on each of the six path types (index = tier), including tiers too short to list: the tier bar and the list both read this. */
+  tierM: number[];
   /** Each rental leg: distance, elapsed time and average moving speed. */
   legs: { distanceM: number; elapsedS: number; movingS: number; kmh: number }[];
   /** Smoothed altitude per sample (null when the track has none). */
@@ -279,7 +282,7 @@ export function analyse(samples: Sample[], legStarts: number[] = [0], opts: { ph
     tierMovM[t] += cumM[i] - cumM[i - 1];
     tierS[t] += samples[i].t - samples[i - 1].t;
   }
-  const byTier = tierM.map((m, tier) => ({ tier, distanceM: m, kmh: kmhOf(tierMovM[tier], tierS[tier]) })).filter((x) => x.distanceM >= 100);
+  const byTier = tierM.map((m, tier) => ({ tier, distanceM: m, kmh: kmhOf(tierMovM[tier], tierS[tier]) })).filter((x) => x.distanceM > 0);
 
   const legs = (n ? legStarts : []).map((start, li) => {
     const from = Math.min(start, n - 1);
@@ -290,9 +293,12 @@ export function analyse(samples: Sample[], legStarts: number[] = [0], opts: { ph
     return { distanceM: d, elapsedS: samples[to].t - samples[from].t, movingS: ms, kmh: kmhOf(d, ms) };
   }).filter((l) => l.distanceM > 0);
 
+  // Very short rides: moving time can be a few seconds, which makes the average absurd. Floor it, cap at the GPS
+  // plausibility limit, and never report a top speed below the average.
+  const avgKmh = Math.min(MAX_PLAUSIBLE_KMH, kmhOf(distanceM, Math.max(movingS, MIN_MOVING_S)));
   return {
-    movingS, elapsedS, distanceM, avgKmh: kmhOf(distanceM, movingS), maxKmh, elevGainM, stops, stoppedS,
-    bests: bestEfforts(samples, cumM), cumM, speed, splits, byTier, legs, elevation,
+    movingS, elapsedS, distanceM, avgKmh, maxKmh: Math.max(maxKmh, avgKmh), elevGainM, stops, stoppedS,
+    bests: bestEfforts(samples, cumM), cumM, speed, splits, byTier, tierM, legs, elevation,
     ...trainingStats(samples, movingS, opts.physiology, opts.rpe),
   };
 }

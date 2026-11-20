@@ -13,19 +13,30 @@ import "./training.css";
 /** Which half of the Rides tab is showing. A signal so it survives opening a ride and coming back. */
 export const trainingOn = signal(false);
 
+const axisDate = (day: number, withYear: boolean) =>
+  dayDate(day).toLocaleDateString("en-SG", { day: "numeric", month: "short", ...(withYear ? { year: "2-digit" } : {}), timeZone: "UTC" });
 const shortDate = (day: number) => dayDate(day).toLocaleDateString("en-SG", { day: "numeric", month: "short", timeZone: "UTC" });
 const PERIOD_LABEL: Record<GoalPeriod, string> = { week: "this week", month: "this month", year: "this year" };
 const METRIC_LABEL: Record<GoalMetric, string> = { distance: "Distance", time: "Time", rides: "Rides" };
 const METRIC_UNIT: Record<GoalMetric, string> = { distance: "km", time: "hours", rides: "rides" };
 const BOUNDS: Record<GoalMetric, [number, number]> = { distance: [1, 100_000], time: [1, 5_000], rides: [1, 2_000] };
 
+/** Last fetched rides: shown at once when you come back to the tab, then refreshed quietly. */
+let cachedRides: Ride[] | null = null;
+let cachedAt = 0;
+const FRESH_MS = 30_000;
+
 export function Training() {
-  const [rides, setRides] = useState<Ride[] | null>(null);
+  const [rides, setRidesState] = useState<Ride[] | null>(cachedRides);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { api.rides().then(setRides).catch((e) => setError(e.message)); }, []);
+  useEffect(() => {
+    if (cachedRides && Date.now() - cachedAt < FRESH_MS) return;
+    api.rides().then((r) => { cachedRides = r; cachedAt = Date.now(); setRidesState(r); }).catch((e) => setError(e.message));
+  }, []);
   return (
     <>
       {error && <div class="banner warn">{error}</div>}
+      {!rides && !error && <p class="muted" role="status">Loading training…</p>}
       {rides && (
         <>
           <Goals rides={rides} />
@@ -212,7 +223,7 @@ function FitnessLines({ series, days, setDays, cursor, setCursor }: {
           {days <= 90 && series.map((p, i) => p.rides && <circle key={p.day} cx={x(i)} cy={y(p.fitness)} r="2.6" class="fit-dot" />)}
           {cursor !== null && <line x1={x(cursor)} x2={x(cursor)} y1="0" y2={H} class="fit-cursor" />}
         </svg>
-        <div class="chart-axis"><span>{shortDate(series[0].day)}</span><span>{shortDate(series[series.length - 1].day)}</span></div>
+        <div class="chart-axis"><span>{axisDate(series[0].day, days >= 365)}</span><span>{axisDate(series[series.length - 1].day, days >= 365)}</span></div>
       </div>
       <p class="muted">
         <b>Fitness</b> is your average effort over the last 6 weeks: it rises slowly when you ride regularly. <b>Fatigue</b> is the last week only, so it jumps after hard rides and fades fast.

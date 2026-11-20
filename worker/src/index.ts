@@ -4,6 +4,7 @@ import { getConditions } from "./conditions.ts";
 import { AVATAR_AT, avatarUrl, registerAvatars } from "./avatars.ts";
 import { registerCrews } from "./crews.ts";
 import { registerRideData } from "./rideData.ts";
+import { registerHrUpload } from "./hrUpload.ts";
 import { registerGoals } from "./goals.ts";
 import { searchPlaces } from "./search.ts";
 import { trimEnds } from "./polyline.ts";
@@ -149,7 +150,9 @@ async function mergeDevice(db: D1Database, device: string, account: string) {
 }
 
 /** The only API routes anyone may call without an identity. Everything else fails closed. */
-const PUBLIC_API = [/^\/api\/health$/, /^\/api\/search$/, /^\/api\/conditions$/, /^\/api\/share\/[^/]+$/];
+const PUBLIC_API = [/^\/api\/health$/, /^\/api\/search$/, /^\/api\/conditions$/, /^\/api\/share\/[^/]+$/,
+  // Heart rate from an iOS Shortcut: no identity, authorised only by the one-ride token in the path.
+  /^\/api\/hr\/[^/]+$/];
 
 /**
  * Routes that need a real account, not just a device id: friends can't find, invite or follow
@@ -203,6 +206,7 @@ app.put("/api/me", async (c) => {
 registerCrews(app);
 registerAvatars(app);
 registerRideData(app);
+registerHrUpload(app);
 registerSocial(app);
 registerGoals(app);
 

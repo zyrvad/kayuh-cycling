@@ -192,6 +192,11 @@ export const api = {
   setRideEffort: (id: string, rpe: number | null) => req<{ rpe: number | null }>("PUT", `/api/rides/${id}/effort`, { rpe }),
   /** Replace a ride's track and stats (adding watch data to a recorded ride). Owner only. */
   putRideTrack: (id: string, body: { track: TrackJson; stats: RideStats }) => req<{ ok: true }>("PUT", `/api/rides/${id}/track`, body),
+  /** Mint a 24 h upload token for the iOS Shortcut that sends Apple Health heart rate for this ride. Owner only. */
+  hrToken: (id: string) => req<{ token: string; uploadUrl: string; start: string; end: string }>("POST", `/api/rides/${id}/hr-token`),
+  /** Heart rate a Shortcut uploaded and the app hasn't merged yet. Owner only. */
+  hrPending: (id: string) => req<{ samples: { t: string; bpm: number }[] }>("GET", `/api/rides/${id}/hr-pending`).then((r) => r.samples),
+  clearHrPending: (id: string) => req("DELETE", `/api/rides/${id}/hr-pending`),
   rideSharing: (id: string) => req<RideSharing>("GET", `/api/rides/${id}/sharing`),
   setRideSharing: (id: string, s: RideSharing) => req<RideSharing>("PUT", `/api/rides/${id}/sharing`, s),
 

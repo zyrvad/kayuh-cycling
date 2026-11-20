@@ -10,6 +10,7 @@ import { Avatar, Page, Sheet, TabBar, TierBar } from "./common.tsx";
 import { Back, Close, Share, Trash } from "./Icons.tsx";
 import { Flyover } from "./Flyover.tsx";
 import { ImportRide, AddWatchFile } from "./ImportRide.tsx";
+import { AddHeartRate } from "./HeartRateShortcut.tsx";
 import { MatchedRides, RideHealth } from "./RideHealth.tsx";
 import { openSaved } from "./Tabs.tsx";
 import { Training, trainingOn } from "./Training.tsx";
@@ -359,7 +360,7 @@ function RideDetailPage({ id, all, map, onChange }: { id: string; all: Ride[]; m
               {st && <Stat label="Stops" value={String(st.stops)} unit={st.stoppedS >= 60 ? `· ${duration(st.stoppedS)}` : ""} />}
               {ride.predictedS ? <Stat label="vs Kayuh's estimate" value={vsEstimate(st?.movingS ?? ride.timeS, ride.predictedS)} /> : null}
             </div>
-            <TierBar tierM={ride.tierM} labels />
+            <TierBar tierM={a && a.tierM.some((m) => m > 0) ? a.tierM : ride.tierM} labels />
 
             {a && samples && (
               <section class="stack-8">
@@ -445,7 +446,12 @@ function RideDetailPage({ id, all, map, onChange }: { id: string; all: Ride[]; m
             {mine && (
               <RideHealth ride={ride} a={a} samples={samples} cursor={cursor} onCursor={setCursor} onRpe={saveRpe}
                 watchFile={samples && ride.track ? (
-                  <AddWatchFile ride={ride} samples={samples} onSaved={(track, stats) => { setRide({ ...ride, track, stats }); onChange(); }} />
+                  <>
+                    {ride.stats?.avgHr === undefined && (
+                      <AddHeartRate ride={ride} samples={samples} onSaved={(track, stats) => { setRide({ ...ride, track, stats }); onChange(); }} />
+                    )}
+                    <AddWatchFile ride={ride} samples={samples} onSaved={(track, stats) => { setRide({ ...ride, track, stats }); onChange(); }} />
+                  </>
                 ) : undefined} />
             )}
 

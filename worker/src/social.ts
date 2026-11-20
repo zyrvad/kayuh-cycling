@@ -63,6 +63,8 @@ export function deleteRideStatements(db: D1Database, rideId: string, ownerId: st
     db.prepare(`DELETE FROM ride_shares WHERE ride_id = ${owned}`).bind(rideId, ownerId),
     db.prepare(`DELETE FROM kudos WHERE ride_id = ${owned}`).bind(rideId, ownerId),
     db.prepare(`DELETE FROM comments WHERE ride_id = ${owned}`).bind(rideId, ownerId),
+    db.prepare(`DELETE FROM hr_tokens WHERE ride_id = ${owned}`).bind(rideId, ownerId),
+    db.prepare(`DELETE FROM ride_hr_pending WHERE ride_id = ${owned}`).bind(rideId, ownerId),
     db.prepare("DELETE FROM rides WHERE id = ? AND user_id = ?").bind(rideId, ownerId),
   ];
 }

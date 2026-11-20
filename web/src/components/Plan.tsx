@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import type { RouteResult } from "@kayuh/router";
 import { api, type CrewSummary, type NewRoute } from "../api.ts";
-import { router } from "../routerClient.ts";
+import { sendToWatch } from "../gpxExport.ts";
 import {
   addStop, cap, current, groupCap, loopKm, me, mode, movePoint, openCrew, openGroupRide, refreshMe, pickIndex, planError, planning, points, prefs, removePoint, results,
   reverseRoute, routeName, savedRouteId, screen, selected, settings, sharedName, showToast, startRide,
@@ -66,23 +66,6 @@ async function ensureSaved(r: RouteResult): Promise<string> {
 
 const shareSummary = (r: RouteResult) =>
   `${km(r.distanceM)} km · ${duration(r.timeS)} · ${Math.round((100 * (r.tierM[0] + r.tierM[1])) / Math.max(1, r.distanceM))}% on park connectors and cycling paths`;
-
-async function sendToWatch(r: RouteResult) {
-  const name = routeName();
-  const gpx = await router.gpx(r, name);
-  const file = new File([gpx], `${name.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "kayuh-route"}.gpx`, { type: "application/gpx+xml" });
-  // On iPhone the share sheet can hand the file straight to Huawei Health or Zepp.
-  if (navigator.canShare?.({ files: [file] })) {
-    await navigator.share({ files: [file], title: name }).catch(() => {});
-    return;
-  }
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(file);
-  a.download = file.name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-  showToast("GPX downloaded: import it in Huawei Health (Me › My route) or Zepp");
-}
 
 /** Where row `i` should sit while row `from` is being dragged to `to`. */
 function shiftFor(i: number, from: number, to: number, rowH: number): number {
@@ -300,7 +283,7 @@ export function Plan({ map }: { map: MapView | null }) {
             <Bookmark fill={savedRouteId.value ? "currentColor" : "none"} />
           </button>
           <button class="icon-btn outline" aria-label="Share route" onClick={() => setSharing(true)}><Share /></button>
-          <button class="btn outline grow nowrap" onClick={() => sendToWatch(r)}><Watch /> To watch</button>
+          <button class="btn outline grow nowrap" onClick={() => sendToWatch(r, routeName()).catch((e) => showToast(e.message))}><Watch /> Send to watch (GPX)</button>
           <button class="btn primary grow" onClick={() => startRide(r)}>Start ride</button>
         </div>
       )}

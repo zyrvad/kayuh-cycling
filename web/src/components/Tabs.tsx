@@ -6,7 +6,8 @@ import {
 import { duration, km, OPERATOR_NAMES } from "../util.ts";
 import { Avatar, Page, squarePhoto, TabBar, TierBar } from "./common.tsx";
 import { showOnboarding } from "./Onboarding.tsx";
-import { Share, Trash } from "./Icons.tsx";
+import { Share, Trash, Watch } from "./Icons.tsx";
+import { sendSavedToWatch } from "../gpxExport.ts";
 import { ShareSheet } from "./ShareSheet.tsx";
 
 export function openSaved(r: Pick<SavedRoute, "id" | "mode" | "name" | "points" | "distanceM">) {
@@ -46,6 +47,8 @@ export function RoutesTab() {
                 <span class="muted">{km(r.distanceM)} km · {duration(r.timeS)} · {r.legs} leg{r.legs > 1 ? "s" : ""}{r.shareToken ? " · shared" : ""}</span>
                 <TierBar tierM={r.tierM} height={6} />
               </button>
+              <button class="mini-btn accent" aria-label={`Send ${r.name} to watch (GPX)`} title="Send to watch (GPX)"
+                onClick={() => sendSavedToWatch(r).catch((e) => showToast(e.message))}><Watch size={18} /></button>
               <button class="mini-btn accent" aria-label={`Share ${r.name}`} onClick={() => setSharing(r)}><Share size={18} /></button>
               <button class="mini-btn" aria-label={`Delete ${r.name}`} onClick={async () => {
                 if (!confirm(`Delete "${r.name}"?`)) return;
