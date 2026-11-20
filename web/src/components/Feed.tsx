@@ -6,7 +6,8 @@ import { screen, openRide, showToast } from "../state.ts";
 import { duration, km } from "../util.ts";
 import { Avatar } from "./common.tsx";
 import { Close, Share } from "./Icons.tsx";
-import { KudosButton, MiniMap, useTitle } from "./Rides.tsx";
+import { KudosButton, useTitle } from "./Rides.tsx";
+import { RouteCard } from "./RouteCard.tsx";
 import "./feed.css";
 
 /** Which half of the Crew tab is showing. */
@@ -107,27 +108,38 @@ function FeedCard({ item: i }: { item: FeedItem }) {
   const title = useTitle(i.name, i.polyline);
   const moving = i.stats?.movingS ?? i.timeS;
   const avg = i.stats?.avgKmh ?? (i.timeS > 0 ? (i.distanceM / i.timeS) * 3.6 : 0);
+  const header = (
+    <span class="feed-head">
+      <Avatar name={i.rider.name} url={i.rider.avatar} />
+      <span class="stack-2">
+        <strong>{i.mine ? "You" : i.rider.name}</strong>
+        <span class="muted small">{when(i.riddenAt)}{i.crews.length ? ` · ${i.crews.map((c) => c.name).join(", ")}` : ""}</span>
+      </span>
+    </span>
+  );
+  const stats = (
+    <div class="feed-stats">
+      <div><small>Distance</small><b>{km(i.distanceM)} km</b></div>
+      <div><small>Moving time</small><b>{duration(moving)}</b></div>
+      <div><small>Avg speed</small><b>{avg.toFixed(1)} km/h</b></div>
+    </div>
+  );
+  const actions = (
+    <>
+      <KudosButton id={i.id} kudos={i.kudos} kudoed={i.kudoed} mine={i.mine} />
+      <span class="muted small">{i.comments} comment{i.comments === 1 ? "" : "s"}</span>
+    </>
+  );
+  const open = () => openRide(i.id, !i.mine);
+  if (i.polyline) return <RouteCard polyline={i.polyline} title={title} meta={stats} header={header} onOpen={open} actions={actions} />;
   return (
-    <article class="feed-card" role="button" tabIndex={0} onClick={() => openRide(i.id, !i.mine)}
-      onKeyDown={(e) => { if (e.key === "Enter") openRide(i.id, !i.mine); }}>
-      <header class="feed-head">
-        <Avatar name={i.rider.name} url={i.rider.avatar} />
-        <span class="stack-2">
-          <strong>{i.mine ? "You" : i.rider.name}</strong>
-          <span class="muted small">{when(i.riddenAt)}{i.crews.length ? ` · ${i.crews.map((c) => c.name).join(", ")}` : ""}</span>
-        </span>
-      </header>
-      <strong class="feed-title">{title}</strong>
-      <div class="feed-stats">
-        <div><small>Distance</small><b>{km(i.distanceM)} km</b></div>
-        <div><small>Moving time</small><b>{duration(moving)}</b></div>
-        <div><small>Avg speed</small><b>{avg.toFixed(1)} km/h</b></div>
-      </div>
-      {i.polyline ? <MiniMap polyline={i.polyline} size={320} class="feed-map" /> : <div class="feed-map feed-map-empty muted small">Too short to show without giving away the start and finish</div>}
-      <footer class="feed-foot">
-        <KudosButton id={i.id} kudos={i.kudos} kudoed={i.kudoed} mine={i.mine} />
-        <span class="muted small">{i.comments} comment{i.comments === 1 ? "" : "s"}</span>
-      </footer>
+    <article class="route-card">
+      <button type="button" class="rc-open" onClick={open} aria-label={`Open ${title}`}>
+        <div class="rc-header">{header}</div>
+        <div class="rc-map feed-map-empty muted small" style={{ aspectRatio: "16 / 9" }}>Too short to show without giving away the start and finish</div>
+        <div class="rc-body"><div class="rc-title">{title}</div><div class="rc-meta">{stats}</div></div>
+      </button>
+      <div class="rc-actions">{actions}</div>
     </article>
   );
 }

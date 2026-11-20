@@ -13,6 +13,7 @@ import { ImportRide, AddWatchFile } from "./ImportRide.tsx";
 import { AddHeartRate } from "./HeartRateShortcut.tsx";
 import { MatchedRides, RideHealth } from "./RideHealth.tsx";
 import { openSaved } from "./Tabs.tsx";
+import { RouteCard } from "./RouteCard.tsx";
 import { Training, trainingOn } from "./Training.tsx";
 import "./feed.css";
 
@@ -201,25 +202,9 @@ function RideCard({ ride, rider, avatar, onOpen, action }: {
 }) {
   const title = useTitle(ride.name, ride.polyline);
   const st = ride.stats;
-  return (
-    <div class="list-card ride-card-row" role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}>
-      <div class="list-main">
-        {rider && <span class="row gap-6 small muted"><Avatar name={rider} url={avatar} class="sm" />{rider}</span>}
-        <strong>{title}</strong>
-        <span class="muted">{dateLabel(ride.riddenAt)} · {partOfDay(ride.riddenAt)}</span>
-        <span class="ride-figures">
-          <span><b>{km(ride.distanceM)}</b> km</span>
-          <span><b>{duration(st?.movingS ?? ride.timeS)}</b></span>
-          {st && <span><b>{st.avgKmh.toFixed(1)}</b> km/h</span>}
-        </span>
-        <TierBar tierM={ride.tierM} height={6} />
-      </div>
-      <div class="ride-card-side">
-        <MiniMap polyline={ride.polyline} />
-        {action}
-      </div>
-    </div>
-  );
+  const meta = `${dateLabel(ride.riddenAt)} · ${km(ride.distanceM)} km · ${duration(st?.movingS ?? ride.timeS)}`;
+  const header = rider ? <span class="row gap-6 small muted"><Avatar name={rider} url={avatar} class="sm" />{rider}</span> : undefined;
+  return <RouteCard polyline={ride.polyline} title={title} meta={meta} tierM={ride.tierM} header={header} aspect={2} onOpen={onOpen} actions={action} />;
 }
 
 /** A small drawing of the ride's shape (no map tiles: dozens of these must stay cheap). */
