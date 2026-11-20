@@ -14,7 +14,7 @@ export function isOnboarded(): boolean {
   try { return localStorage.getItem(KEY) === "1"; } catch { return false; }
 }
 
-/** True while the welcome cards are on screen. MeTab's "Replay intro" sets it. */
+/** True while the welcome cards are on screen. Settings "Show welcome again" sets it. */
 export const showOnboarding = signal(!isOnboarded());
 
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent);

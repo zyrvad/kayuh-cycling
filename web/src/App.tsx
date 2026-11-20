@@ -9,8 +9,10 @@ import { handleFollowLink } from "./components/Feed.tsx";
 import { Plan } from "./components/Plan.tsx";
 import { Ride } from "./components/Ride.tsx";
 import { CrewTab } from "./components/Crew.tsx";
-import { MeTab, openSaved, RoutesTab } from "./components/Tabs.tsx";
+import { openSaved, RoutesTab } from "./components/Tabs.tsx";
 import { RidesTab } from "./components/Rides.tsx";
+import { ProfilePage } from "./components/Profile.tsx";
+import { SettingsPage } from "./components/Settings.tsx";
 import { MapView } from "./map.ts";
 import { loadActiveRide } from "./activeRide.ts";
 import { updateAvailable, watchForUpdates } from "./update.ts";
@@ -125,7 +127,8 @@ export function App() {
       {s === "rides" && <RidesTab map={map} />}
       {s === "crew" && <CrewTab map={map} />}
       {s === "home" && <Home />}
-      {(s === "me" || s === "settings") && <MeTab />}
+      {s === "me" && <ProfilePage />}
+      {s === "settings" && <SettingsPage />}
       {showOnboarding.value && s !== "ride" && !hasActiveRide() && <Onboarding />}
       <TourLayer />
       {toast.value && <div class="toast" role="status">{toast.value}</div>}
