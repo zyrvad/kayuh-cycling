@@ -9,6 +9,10 @@ import { TIER_COLORS, TIER_LABELS } from "./util.ts";
 // MapLibre 6 looks for its tile worker next to its own module, which bundling moves. Point it at the copy Vite ships.
 maplibregl.setWorkerUrl(mapWorkerUrl);
 
+/** Resolves the first time any MapView fires 'load' (the launch screen waits on it). */
+let resolveFirstMapLoad!: () => void;
+export const firstMapLoad: Promise<void> = new Promise((r) => (resolveFirstMapLoad = r));
+
 const STYLE = "https://tiles.openfreemap.org/styles/positron";
 const FONT = ["Noto Sans Bold"];
 const INK = "#1D2A23";
@@ -123,6 +127,7 @@ export class MapView {
       this.addLayers();
       // Keep the attribution as a small (i) button instead of a banner over the map.
       container.querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show");
+      resolveFirstMapLoad();
       resolve();
     }));
     this.map.on("click", (e) => {

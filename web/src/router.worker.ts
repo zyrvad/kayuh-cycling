@@ -16,9 +16,43 @@ export type WorkerRequest =
 
 let ctx: PlanContext | null = null;
 let pois: Poi[] = [];
+// Real size of web/public/data/graph.bin.gz, used when the server sends no Content-Length (chunked or re-encoded).
+// Update when the graph is rebuilt; it only affects the progress bar, which is clamped to 0.95 until ready.
+const GRAPH_GZ_BYTES_FALLBACK = 5_356_189;
+const GRAPH_RAW_BYTES_FALLBACK = 12_608_968; // same file after gunzip
+
+/** Fetch the gzipped graph, counting compressed bytes as they stream so the launch screen can show real progress. */
+async function loadGraph(): Promise<ArrayBuffer> {
+  const r = await fetch("/data/graph.bin.gz");
+  const header = Number(r.headers.get("content-length"));
+  // Some servers (the Vite dev server) send the .gz with Content-Encoding: gzip, so the browser has already
+  // gunzipped it: the bytes we count are then raw ones and we must not decompress again.
+  const decoded = !!r.headers.get("content-encoding");
+  const total = decoded ? GRAPH_RAW_BYTES_FALLBACK : header > 0 ? header : GRAPH_GZ_BYTES_FALLBACK;
+  let loaded = 0;
+  let last = 0;
+  const counter = new TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>({
+    transform(chunk, controller) {
+      loaded += chunk.byteLength;
+      const now = performance.now();
+      if (now - last >= 50) {
+        last = now;
+        postMessage({ type: "progress", loaded: Math.min(loaded, total * 0.95), total });
+      }
+      controller.enqueue(chunk);
+    },
+  });
+  const buf = await new Response(r.body!.pipeThrough(counter)).arrayBuffer();
+  // Decide by the gzip magic bytes, not headers: a CDN may add its own Content-Encoding (br) on top of the .gz,
+  // which the browser strips, leaving gzip bytes that we still have to inflate.
+  const head = new Uint8Array(buf, 0, Math.min(2, buf.byteLength));
+  if (head[0] !== 0x1f || head[1] !== 0x8b) return buf;
+  return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
+}
+
 const ready = (async () => {
   const [g, p] = await Promise.all([
-    fetch("/data/graph.bin.gz").then((r) => new Response(r.body!.pipeThrough(new DecompressionStream("gzip"))).arrayBuffer()),
+    loadGraph(),
     fetch("/data/pois.json").then((r) => r.json()),
   ]);
   pois = p.pois;

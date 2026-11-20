@@ -9,8 +9,20 @@ let nextId = 1;
 let readyResolve: (info: { nodes: number; built: string }) => void;
 export const routerReady = new Promise<{ nodes: number; built: string }>((r) => (readyResolve = r));
 
+const progressListeners = new Set<(f: number) => void>();
+/** Graph download progress, 0..1 (clamped below 1 until the router is ready). Returns an unsubscribe. */
+export function onRouterProgress(cb: (f: number) => void): () => void {
+  progressListeners.add(cb);
+  return () => progressListeners.delete(cb);
+}
+
 worker.onmessage = (e) => {
   const d = e.data;
+  if (d.type === "progress") {
+    const f = Math.min(0.95, d.loaded / d.total);
+    progressListeners.forEach((cb) => cb(f));
+    return;
+  }
   if (d.type === "ready") return readyResolve(d);
   const p = pending.get(d.id);
   if (!p) return;

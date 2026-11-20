@@ -4,7 +4,7 @@
   "description": "Cycling routes in Singapore on park connectors, ending at legal bike parking.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#EEF1EC",
+  "background_color": "#17804F",
   "theme_color": "#17804F",
   "icons": [
     { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
