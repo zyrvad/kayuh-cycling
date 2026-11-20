@@ -1,0 +1,27 @@
+.home { display: flex; flex-direction: column; gap: 16px; margin-bottom: -8px; }
+.home-cond { margin: -8px 0 0; min-height: 20px; font-size: 14px; font-weight: 500; color: var(--muted); }
+.home-cond.warn { color: var(--warn); }
+.home-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.home-action { min-height: 92px; border-radius: var(--r-card); padding: 14px; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; text-align: left; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.home-action.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.home-action b { font-size: 17px; font-weight: 800; display: block; }
+.home-action small { font-size: 12.5px; font-weight: 500; opacity: 0.8; display: block; margin-top: 1px; }
+.home-week { display: flex; align-items: center; gap: 16px; min-height: 84px; padding: 10px 16px; border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--line); text-align: left; width: 100%; color: var(--ink); }
+.home-week .ring { flex-shrink: 0; position: relative; width: 64px; height: 64px; }
+.home-week .ring svg { transform: rotate(-90deg); display: block; }
+.home-week .big { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.home-week .sub { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.home-week .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.home-sec { display: flex; flex-direction: column; gap: 8px; }
+.home-sec-head { display: flex; align-items: center; justify-content: space-between; min-height: 28px; }
+.home-sec-head h2 { margin: 0; font-size: 17px; font-weight: 700; }
+.home-sec-head .btn { height: 36px; padding: 0 4px; font-size: 14px; }
+.home-empty { margin: 0; font-size: 14px; color: var(--muted); }
+.home-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 72px; padding: 8px 8px 8px 14px; border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--line); text-align: left; color: var(--ink); }
+.home-row .avatar { width: 36px; height: 36px; flex-shrink: 0; }
+.home-row .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.home-row .txt b { font-size: 15px; font-weight: 700; }
+.home-row .txt span { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-row .thumb { width: 56px; height: 56px; flex-shrink: 0; border-radius: 12px; background: var(--ground); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.home-row .thumb svg { width: 100%; height: 100%; }
+.home-last-skel { aspect-ratio: 2.4 / 1; border-radius: var(--r-card); background: var(--line); opacity: 0.5; }

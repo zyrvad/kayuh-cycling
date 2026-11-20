@@ -126,6 +126,8 @@ export function openGroupRide(id: string) {
 
 export type Screen = "home" | "settings" | "freeride" | "discover" | "plan" | "ride" | "routes" | "rides" | "crew" | "me";
 export const screen = signal<Screen>("home");
+/** Set by Home to ask the map tab to open its search. */
+export const mapIntent = signal<"search" | null>(null);
 /** The ride open on the Rides tab's detail page, if any. */
 export const rideDetail = signal<{ id: string; crew?: boolean; back?: Screen } | null>(null);
 

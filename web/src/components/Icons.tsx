@@ -55,3 +55,5 @@ export const TabCrew = () => tabIcon(<><circle cx="9" cy="8" r="3.5" /><path d="
 export const TabRides = () => tabIcon(<path d="M4 19V9M10 19V5M16 19v-7M22 19H2" />);
 export const TabMe = () => tabIcon(<><circle cx="12" cy="8" r="4" /><path d="M4 21c1-4 4-6 8-6s7 2 8 6" /></>);
 export const More = ({ size = 20, ...r }: P) => <svg {...base(size, r)}><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></svg>;
+export const RouteIcon = ({ size = 22, ...r }: P) => <svg {...base(size, r)}><circle cx="6" cy="18" r="2.5" /><circle cx="18" cy="6" r="2.5" /><path d="M8.5 18H15a3 3 0 000-6H9a3 3 0 010-6h6.5" /></svg>;
+export const PlayIcon = ({ size = 22, ...r }: P) => <svg {...base(size, r)}><circle cx="12" cy="12" r="9" /><path d="M10 8.5l5.5 3.5-5.5 3.5z" /></svg>;
