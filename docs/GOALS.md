@@ -29,11 +29,13 @@ Constraints:
 | Step | What | Status |
 |---|---|---|
 | W0 | Owner checks | Watch is a **GT 4 (PNX-B19), HarmonyOS 5.0.0.88**, not a GT 4 Pro. Phone is an iPhone 17 on iOS 26.6. Heart rate reaches Apple Health: yes. Huawei **GPX and TCX** exports both have route, elevation and time but **no heart rate**. The Strava "Export Original" sample was recorded by the Strava iPhone app (FIT, GPS only, no heart rate), so it doesn't test the Huawei-to-Strava path. Huawei developer account: created. Free Apple account: OK, with a 7-day rebuild |
-| W1 | Research spike: check the automatic heart-rate paths and the two-way Huawei path on iPhone (see below) | Proposed |
-| W2 | Automatic heart rate with no watch app. Huawei Health syncs to Strava, Strava notifies Kayuh, and Kayuh pulls heart rate and attaches it to the matching ride (or creates one for a watch-only ride). Fallback: a one-tap iOS Shortcut that reads heart rate from Apple Health | Proposed |
-| W3 | Live sensor API on the Worker (a ride token; the watch or companion posts samples) and live heart rate on the ride screen. Works for any brand | Drafted in WATCH.md section 6 |
-| W4 | Huawei spike: a hello-world GT 4 app installed on Jaden's watch, plus an iPhone companion that passes a message both ways. Go or no-go | Needs the native-companion decision |
-| W5 | Huawei watch app: free ride and planned ride modes | After W4 |
+| W1 | Research spike (results in WATCH.md, "Update 20 Nov 2026") | Done 20 Nov |
+| W2a | **Apple Health heart rate via iOS Shortcut.** When a Kayuh ride ends, Kayuh opens a "Kayuh heart rate" shortcut with the ride's time range and a short-lived upload token. The shortcut reads heart rate from Apple Health (which Huawei Health already fills) and posts it to Kayuh, where it's merged onto the ride. No Strava terms, no approvals, $0 | Next to build |
+| W2b | **Strava auto-import for rides started on the watch.** Huawei Health syncs to Strava, a Strava webhook notifies Kayuh, and Kayuh fetches GPS and heart rate and creates or enriches the ride. Owner-only | After the owner's Strava test ride, and Strava's answer on their 7-day caching rule |
+| W2c | **Planned ride on the watch without an app.** Kayuh GPX (with parking and leg waypoints) imported as a Huawei Health route, while Kayuh's phone screen keeps the leg timer | Owner test now |
+| W3 | Live sensor API on the Worker (ride token, samples posted live) and live heart rate on the ride screen. Shares the upload token with W2a | Built only when a watch app exists (W4 or W6) |
+| W4 | Huawei spike: a hello-world GT 4 app installed on Jaden's watch, plus an iPhone companion (free Apple account, weekly `rebuild.sh`) passing a message both ways. Go or no-go | Gated on Huawei's Wear Engine decision (1–2 weeks; individuals may be refused P2P) and on DevEco seeing a watch paired to an iPhone |
+| W5 | Huawei watch app: free ride and planned ride modes (speed, distance and time left, leg timer, next parking, mini map) | After W4 says go |
 | W6 | Other watches: Amazfit (Zepp OS, friend tests), Garmin, then one native app reading Apple Health / Health Connect for the public launch | Later |
 
 ### Data pathways
