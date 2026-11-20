@@ -68,7 +68,6 @@ export function SettingsPage() {
           <h2>Apple Health heart rate</h2>
           <p class="muted small">An iPhone shortcut brings your watch's heart rate onto a ride. Set it up once, then tap Add heart rate on a ride.</p>
           <button class="btn secondary sm" onClick={() => setShortcutHelp(true)}>Set up the shortcut</button>
-          {shortcutHelp && <ShortcutHelp onClose={() => setShortcutHelp(false)} />}
         </section>
         <section class="group">
           <h2>Privacy</h2>
@@ -96,6 +95,8 @@ export function SettingsPage() {
         </section>
       </Page>
       <TabBar />
+      {/* Outside .page: the help is a full-screen sheet and .page scrolls. */}
+      {shortcutHelp && <ShortcutHelp onClose={() => setShortcutHelp(false)} />}
     </>
   );
 }
