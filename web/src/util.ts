@@ -86,3 +86,7 @@ export const THEMES = {
   anywheel: { accent: "#12804A", deep: "#0B5E35", soft: "#E5F3EA", ink: "#0B4A2B", light: "#B5E3C8" },
   own: { accent: "#17804F", deep: "#0F5E39", soft: "#E8F3EC", ink: "#0F4D30", light: "#B9E6CB" },
 } as const;
+
+/** Max/min of a big array without spreading it into call arguments (long rides overflow the stack in Safari). */
+export function maxOf(a: Iterable<number>, init = -Infinity): number { let m = init; for (const v of a) if (v > m) m = v; return m; }
+export function minOf(a: Iterable<number>, init = Infinity): number { let m = init; for (const v of a) if (v < m) m = v; return m; }

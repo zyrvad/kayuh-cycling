@@ -1,0 +1,40 @@
+/* Training view: goals, Fitness & Freshness chart, training log. Lives inside the Rides tab. */
+.rides-switch { margin-bottom: 2px; }
+
+.goal-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.goal-card { display: flex; align-items: center; gap: 10px; padding: 10px; border: 0; border-radius: 14px; background: var(--surface); text-align: left; min-width: 0; }
+.goal-text { display: flex; flex-direction: column; min-width: 0; font-size: 14px; }
+.goal-text small { line-height: 1.25; }
+.ring { width: 48px; height: 48px; flex-shrink: 0; }
+.ring-bg { fill: none; stroke: var(--soft); stroke-width: 5; }
+.ring-fg { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; }
+.ring-pct { font-size: 11px; font-weight: 700; fill: var(--ink); }
+
+.fit-readout { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.fit-key { font-size: 13px; font-weight: 600; }
+.fit-key b { font-variant-numeric: tabular-nums; }
+.fit-key::before { content: ""; display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: middle; background: currentColor; }
+.fit-key.fitness, .fit-line.fitness { color: var(--blue); stroke: var(--blue); }
+.fit-key.fatigue, .fit-line.fatigue { color: #D9541E; stroke: #D9541E; }
+.fit-key.form, .fit-line.form { color: var(--accent); stroke: var(--accent); }
+.fit-svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
+.fit-line { fill: none; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.fit-line.form { stroke-width: 1.4; }
+.fit-zero { stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 3 3; }
+.fit-dot { fill: var(--surface); stroke: var(--blue); stroke-width: 1.4; }
+.fit-cursor { stroke: var(--ink); stroke-width: 1; }
+
+.tlog-toggle { width: 170px; flex-shrink: 0; }
+.tlog-toggle .seg { min-height: 32px; font-size: 13px; padding: 2px 4px; }
+.tlog { display: flex; flex-direction: column; gap: 2px; background: var(--surface); border-radius: 14px; padding: 8px 8px 8px 10px; }
+.tlog-row { display: grid; grid-template-columns: 38px repeat(7, minmax(0, 1fr)) 62px; align-items: center; }
+.tlog-head { font-size: 11px; font-weight: 700; color: var(--muted); text-align: center; }
+.tlog-week { font-size: 11px; color: var(--muted); font-weight: 600; }
+.tlog-day-cell { height: 38px; border: 0; background: none; padding: 0; display: flex; align-items: center; justify-content: center; position: relative; }
+.tlog-day-cell::before { content: ""; position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--line); }
+.tlog-day-cell:has(.tlog-dot)::before { display: none; }
+.tlog-day-cell.today::after { content: ""; position: absolute; inset: 2px 1px; border-radius: 10px; border: 1.5px solid var(--accent-light); }
+.tlog-dot { border-radius: 50%; background: var(--accent); display: block; }
+.tlog-total { display: flex; flex-direction: column; align-items: flex-end; font-size: 12px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.tlog-total small { font-size: 11px; }
+.tlog-ride { width: 100%; border: 0; text-align: left; }

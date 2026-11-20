@@ -111,3 +111,20 @@ test("analyse + summary carry the training numbers (and omit them without sensor
   assert.equal(rpeOnly.effort, Math.round(0.5 * 6 * (rpeOnly.movingS / 60)));
   assert.equal(rpeOnly.load, rpeOnly.effort);
 });
+
+test("stats stay valid with a heart-rate spike and a huge time span", () => {
+  const s = ride(60, (i) => (i === 30 ? 2999 : 140));
+  const m = hrMetrics(s, { maxHr: 200 })!;
+  assert.equal(m.maxHr, 140, "a spike outside 25-250 bpm is ignored");
+  const far = ride(60, () => 140);
+  far[59].t = 4e9; // one outlier timestamp must not allocate billions of slots
+  assert.ok(perSecond(far, (x) => x.hr).length <= 48 * 3600 + 1);
+  assert.doesNotThrow(() => analyse(far));
+});
+
+test("speed by path type counts all steps on a tier, so it matches the tier bar", () => {
+  // 600 m on tier 0 sampled every 90 s (>60 s apart, so never "moving"): the distance still counts.
+  const s: Sample[] = Array.from({ length: 5 }, (_, i) => ({ ll: [103.8 + i * 0.0014, 1.3] as [number, number], t: i * 90, alt: null, kmh: null, tier: 0, hr: null, cad: null, power: null }));
+  const a = analyse(s);
+  assert.ok(a.byTier[0] && a.byTier[0].distanceM > 500);
+});

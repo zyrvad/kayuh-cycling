@@ -143,3 +143,30 @@ test("mergeSensors matches by absolute time within 5 s", () => {
   assert.equal(ride[0].power, null);
   assert.equal(mergeSensors([sample(0)], T0, { startMs: T0, samples: [sample(0)] }), 0, "no sensor readings in the file");
 });
+
+const gpxOf = (pts: { time: string; hr?: number }[]) =>
+  `<gpx><trk><trkseg>${pts.map((p, i) => `<trkpt lat="1.3" lon="${103.8 + i * 0.0001}"><time>${p.time}</time>${p.hr !== undefined ? `<extensions><hr>${p.hr}</hr></extensions>` : ""}</trkpt>`).join("")}</trkseg></trk></gpx>`;
+
+test("import: heart rate outside 25-250 bpm is dropped (a spike can't block saving)", () => {
+  const a = parseGpx(gpxOf([{ time: "2026-11-01T07:00:00Z", hr: 120 }, { time: "2026-11-01T07:00:01Z", hr: 2999 }, { time: "2026-11-01T07:00:02Z", hr: 10 }, { time: "2026-11-01T07:00:03Z", hr: 250 }]));
+  assert.deepEqual(a.samples.map((s) => s.hr), [120, null, null, 250]);
+});
+
+test("import: a file spanning more than 48 h is refused with a friendly message", () => {
+  assert.throws(() => parseGpx(gpxOf([{ time: "2026-11-01T07:00:00Z" }, { time: "2026-11-04T07:00:00Z" }])), /48 hours/);
+  assert.doesNotThrow(() => parseGpx(gpxOf([{ time: "2026-11-01T07:00:00Z" }, { time: "2026-11-03T06:00:00Z" }])));
+});
+
+test("FIT: damage mid-file keeps the records already read; nothing readable still errors", () => {
+  const rec = (ts: number) => [0x00, ...le32(ts), ...le32(Math.round(1.3 / (180 / 2 ** 31))), ...le32(Math.round((103.8 + ts * 1e-4) / (180 / 2 ** 31))), 120];
+  const le32 = (v: number) => [v & 255, (v >> 8) & 255, (v >> 16) & 255, (v >>> 24) & 255];
+  const def = [0x40, 0, 0, 20, 0, 4, 253, 4, 0x86, 0, 4, 0x85, 1, 4, 0x85, 3, 1, 2].slice(0, 0).concat([0x40, 0, 0, 20, 0, 4, 253, 4, 0x86, 0, 4, 0x85, 1, 4, 0x85, 3, 1, 2]);
+  const build = (body: number[]) => {
+    const hdr = [12, 0x10, 0, 0, ...le32(body.length), 0x2e, 0x46, 0x49, 0x54];
+    return new Uint8Array([...hdr, ...body, 0, 0]).buffer;
+  };
+  // Two good records, then a data message for an undefined local type (previously threw away everything).
+  const good = build([...def, ...rec(1_000_000_000), ...rec(1_000_000_005), 0x03, 1, 2, 3]);
+  assert.equal(parseFit(good).samples.length, 2);
+  assert.throws(() => parseFit(build([0x03, 1, 2, 3])));
+});

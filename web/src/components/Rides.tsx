@@ -4,12 +4,15 @@ import { api, type CrewRide, type CrewSummary, type Ride, type RideComment, type
 import type { MapView } from "../map.ts";
 import { rideTitle } from "../places.ts";
 import { closeRide, me, refreshMe, rideDetail, screen, showToast } from "../state.ts";
-import { analyse, BEST_EFFORTS, BEST_LABEL, decodeTrack, speedColor, SPEED_LEGEND, type Analysis, type BestKey, type RideStats, type Sample } from "../track.ts";
-import { clock, decodePolyline, duration, km, TIER_COLORS, TIER_LABELS } from "../util.ts";
+import { analyse, BEST_EFFORTS, BEST_LABEL, decodeTrack, speedColor, SPEED_LEGEND, summary, type Analysis, type BestKey, type RideStats, type Sample } from "../track.ts";
+import { clock, decodePolyline, duration, km, maxOf, minOf, TIER_COLORS, TIER_LABELS } from "../util.ts";
 import { Avatar, Page, Sheet, TabBar, TierBar } from "./common.tsx";
 import { Back, Close, Share, Trash } from "./Icons.tsx";
 import { Flyover } from "./Flyover.tsx";
+import { ImportRide, AddWatchFile } from "./ImportRide.tsx";
+import { MatchedRides, RideHealth } from "./RideHealth.tsx";
 import { openSaved } from "./Tabs.tsx";
+import { Training, trainingOn } from "./Training.tsx";
 import "./feed.css";
 
 const dateLabel = (iso: string) => new Date(iso).toLocaleDateString("en-SG", { weekday: "short", day: "numeric", month: "short" });
@@ -57,6 +60,11 @@ export function RidesTab({ map }: { map: MapView | null }) {
     <>
       <Page title="Rides">
         {error && <div class="banner warn">{error}</div>}
+        <div class="segmented rides-switch" role="group" aria-label="Activities or training">
+          <button class={!trainingOn.value ? "seg active" : "seg"} aria-pressed={!trainingOn.value} onClick={() => (trainingOn.value = false)}>Activities</button>
+          <button class={trainingOn.value ? "seg active" : "seg"} aria-pressed={trainingOn.value} onClick={() => (trainingOn.value = true)}>Training</button>
+        </div>
+        {trainingOn.value ? <Training /> : <>
         <div class="segmented" role="group" aria-label="Whose rides">
           <button class={view === "mine" ? "seg active" : "seg"} aria-pressed={view === "mine"} onClick={() => setView("mine")}>Mine</button>
           <button class={view === "crew" ? "seg active" : "seg"} aria-pressed={view === "crew"} onClick={() => setView("crew")}>Crew</button>
@@ -68,6 +76,7 @@ export function RidesTab({ map }: { map: MapView | null }) {
               <div><span class="big">{km(pcn)}</span><small>km on park connectors</small></div>
               <div><span class="big">{rides?.length ?? 0}</span><small>rides</small></div>
             </div>
+            <ImportRide onSaved={reload} />
             <p class="muted small">Rides are private. Tap <strong>Private</strong> on one to choose which crews, or your followers, see it: the first and last 200 m always stay hidden.</p>
             {rides?.length === 0 && <p class="muted">Rides you start from a planned route show up here, with the full map and stats.</p>}
             <ul class="list">
@@ -91,6 +100,7 @@ export function RidesTab({ map }: { map: MapView | null }) {
             </ul>
           </>
         )}
+        </>}
       </Page>
       <TabBar />
       {picking && <SharePicker rideId={picking.id} onClose={() => setPicking(null)} onSaved={() => { setPicking(null); reload(); }} />}
@@ -220,7 +230,7 @@ export function MiniMap({ polyline, size = 76, class: cls = "" }: { polyline: st
     const ps = pts.filter((_, i) => i % step === 0 || i === pts.length - 1);
     const k = Math.cos((ps[0][1] * Math.PI) / 180);
     const xs = ps.map((p) => p[0] * k), ys = ps.map((p) => -p[1]);
-    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+    const [x0, x1, y0, y1] = [minOf(xs), maxOf(xs), minOf(ys), maxOf(ys)];
     const span = Math.max(x1 - x0, y1 - y0) || 1e-6, pad = 8, s = (size - 2 * pad) / span;
     const ox = pad + (size - 2 * pad - (x1 - x0) * s) / 2, oy = pad + (size - 2 * pad - (y1 - y0) * s) / 2;
     const P = ps.map((_, i) => [ox + (xs[i] - x0) * s, oy + (ys[i] - y0) * s]);
@@ -252,10 +262,13 @@ function RideDetailPage({ id, all, map, onChange }: { id: string; all: Ride[]; m
   useEffect(() => {
     api.ride(id).then(setRide).catch((e) => setError(e.status === 404 ? "This ride isn't shared with you any more." : e.message));
   }, [id]);
+  useEffect(() => { if (ride?.mine && !me.value) refreshMe(); }, [ride?.mine]);
   useEffect(() => { if (ride?.mine && me.value?.signedIn) api.crews().then(setCrews).catch(() => {}); }, [ride?.mine]);
 
   const samples: Sample[] | null = useMemo(() => (ride?.track ? decodeTrack(ride.track) : null), [ride]);
-  const a: Analysis | null = useMemo(() => (samples && samples.length > 1 ? analyse(samples, ride?.track?.L) : null), [samples]);
+  const a: Analysis | null = useMemo(
+    () => (samples && samples.length > 1 ? analyse(samples, ride?.track?.L, ride?.mine ? { physiology: me.value, rpe: ride.rpe ?? null } : {}) : null),
+    [samples, ride?.rpe, me.value]);
   const line: LonLat[] = useMemo(() => (samples ? samples.map((s) => s.ll) : ride ? decodePolyline(ride.polyline) : []), [samples, ride]);
   const title = useTitle(ride?.name ?? "Ride", ride?.polyline ?? "");
 
@@ -285,9 +298,22 @@ function RideDetailPage({ id, all, map, onChange }: { id: string; all: Ride[]; m
 
   const st: RideStats | null | undefined = a ?? ride?.stats;
   const mine = !!ride?.mine;
-  const sameRoute = mine && ride?.routeId
-    ? all.filter((r) => r.routeId === ride.routeId).sort((x, y) => (x.stats?.movingS ?? x.timeS) - (y.stats?.movingS ?? y.timeS))
-    : [];
+  // Saving a rating also refreshes the stored effort, which the Training view reads.
+  const saveRpe = async (rpe: number | null) => {
+    if (!ride) return;
+    try {
+      let stats = ride.stats;
+      if (ride.track && samples && samples.length > 1) {
+        // The zones and TSS need the rider's own settings: fetch them rather than trusting a signal that may not have loaded.
+        const physiology = (await api.me().catch(() => null)) ?? me.value;
+        if (physiology) stats = summary(analyse(samples, ride.track.L, { physiology, rpe }));
+        else showToast("Rating saved, but your settings didn't load, so the effort wasn't refreshed.");
+        await api.setRideEffort(id, rpe);
+        if (stats !== ride.stats) { await api.putRideTrack(id, { track: ride.track, stats: stats! }); onChange(); }
+      } else await api.setRideEffort(id, rpe);
+      setRide({ ...ride, rpe, stats });
+    } catch (e) { showToast(`Couldn't save the rating: ${(e as Error).message}`); }
+  };
 
   // The 3D replay takes over the screen; the map keeps the line drawn underneath.
   if (flying && map && line.length > 1) {
@@ -373,11 +399,11 @@ function RideDetailPage({ id, all, map, onChange }: { id: string; all: Ride[]; m
                 <table class="splits">
                   <thead><tr><th>km</th><th>Time</th><th>km/h</th><th class="bar-col" />{a.elevation && <th>Elev</th>}</tr></thead>
                   <tbody>
-                    {a.splits.map((s) => {
-                      const fastest = Math.max(...a.splits.map((x) => x.kmh));
+                    {a.splits.map((s, si) => {
+                      const fastest = maxOf(a.splits.map((x) => x.kmh), 0);
                       return (
                         <tr key={s.km}>
-                          <td>{s.distanceM < 990 ? (s.distanceM / 1000).toFixed(1) : s.km}</td>
+                          <td>{si === a.splits.length - 1 && s.distanceM < 950 ? (s.distanceM / 1000).toFixed(1) : s.km}</td>
                           <td>{clock(s.movingS)}</td>
                           <td>{s.kmh.toFixed(1)}</td>
                           <td class="bar-col"><span class="split-bar" style={{ width: `${(100 * s.kmh) / Math.max(1, fastest)}%`, background: speedColor(s.kmh) }} /></td>
@@ -414,18 +440,13 @@ function RideDetailPage({ id, all, map, onChange }: { id: string; all: Ride[]; m
               </section>
             )}
 
-            {sameRoute.length > 1 && (
-              <section class="stack-8">
-                <h2 class="section-title">This route, every time</h2>
-                <ul class="tier-speeds">
-                  {sameRoute.map((r, i) => (
-                    <li key={r.id} class={r.id === id ? "this-ride" : ""} onClick={() => r.id !== id && (rideDetail.value = { id: r.id })}>
-                      <b class="leg-num">{i + 1}</b><span>{dateLabel(r.riddenAt)}</span><span class="muted">{r.id === id ? "this ride" : ""}</span>
-                      <strong>{duration(r.stats?.movingS ?? r.timeS)}</strong>
-                    </li>
-                  ))}
-                </ul>
-              </section>
+            {mine && <MatchedRides ride={ride} all={all} />}
+
+            {mine && (
+              <RideHealth ride={ride} a={a} samples={samples} cursor={cursor} onCursor={setCursor} onRpe={saveRpe}
+                watchFile={samples && ride.track ? (
+                  <AddWatchFile ride={ride} samples={samples} onSaved={(track, stats) => { setRide({ ...ride, track, stats }); onChange(); }} />
+                ) : undefined} />
             )}
 
             {!samples && mine && <p class="muted small">This ride was saved before Kayuh recorded GPS tracks, so it shows the planned line and no speed breakdown.</p>}
@@ -563,12 +584,12 @@ function Stat({ label, value, unit }: { label: string; value: string; unit?: str
 }
 
 /** A line chart over distance. Drag across it to see the value there, and where it was on the map. */
-function Chart({ a, values, unit, color, cursor, onCursor }: {
+export function Chart({ a, values, unit, color, cursor, onCursor }: {
   a: Analysis; values: (number | null)[]; unit: string; color: string; cursor: number | null; onCursor: (i: number | null) => void;
 }) {
   const W = 320, H = 96, total = a.cumM[a.cumM.length - 1] || 1;
   const vs = values.filter((v): v is number => v !== null);
-  const lo = unit === "km/h" ? 0 : Math.min(...vs), hi = Math.max(...vs, lo + 1);
+  const lo = unit === "km/h" ? 0 : minOf(vs, 0), hi = maxOf(vs, lo + 1);
   const x = (i: number) => (a.cumM[i] / total) * W, y = (v: number) => H - 6 - ((v - lo) / (hi - lo)) * (H - 14);
   const pts = values.map((v, i) => (v === null ? null : `${x(i).toFixed(1)},${y(v).toFixed(1)}`)).filter(Boolean);
   const avg = unit === "km/h" ? a.avgKmh : null;
@@ -583,8 +604,8 @@ function Chart({ a, values, unit, color, cursor, onCursor }: {
     <div class="chart">
       <div class="chart-readout">
         {cursor !== null && values[cursor] !== null
-          ? <><b>{(values[cursor] as number).toFixed(unit === "m" ? 0 : 1)} {unit}</b><span class="muted"> at {km(a.cumM[cursor])} km</span></>
-          : <span class="muted">{unit === "km/h" ? `max ${hi.toFixed(1)} · avg ${a.avgKmh.toFixed(1)} km/h` : `${Math.round(lo)}–${Math.round(hi)} m`}</span>}
+          ? <><b>{(values[cursor] as number).toFixed(unit === "km/h" ? 1 : 0)} {unit}</b><span class="muted"> at {km(a.cumM[cursor])} km</span></>
+          : <span class="muted">{unit === "km/h" ? `max ${hi.toFixed(1)} · avg ${a.avgKmh.toFixed(1)} km/h` : `${Math.round(lo)}–${Math.round(hi)} ${unit}`}</span>}
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" class="chart-svg"
         onPointerDown={pick} onPointerMove={(e) => e.buttons || e.pointerType === "touch" ? pick(e) : undefined} onPointerLeave={() => onCursor(null)}>

@@ -135,6 +135,7 @@ export function effortBody(v: unknown): number | null {
   return o.rpe === undefined || o.rpe === null ? null : rpeValue(o.rpe);
 }
 
+const MAX_RIDE_S = 48 * 3600;
 const MAX_SAMPLES = 30_000; // ~8 hours at one fix a second
 const ints = (v: unknown, k: string, max: number, nullable = false, lim = 1e7) => {
   if (!Array.isArray(v) || v.length > max || !v.every((x) => (nullable && x === null) || (Number.isInteger(x) && Math.abs(x as number) < lim))) {
@@ -144,19 +145,23 @@ const ints = (v: unknown, k: string, max: number, nullable = false, lim = 1e7) =
 };
 
 /** The GPS track of a recorded ride (see web/src/track.ts). Stored as given, after checking its shape and size. */
-function track(v: unknown): string {
+export function track(v: unknown): string {
   const o = obj(v);
   if (o.v !== 1 && o.v !== 2) throw new BadRequest("track.v: expected 1 or 2");
   if (typeof o.p !== "string" || o.p.length > MAX_POLYLINE * 2) throw new BadRequest("track.p: expected an encoded polyline");
-  const out: Obj = { v: o.v, p: o.p, t: ints(o.t, "t", MAX_SAMPLES) };
+  const out: Obj = { v: o.v, p: o.p, t: ints(o.t, "t", MAX_SAMPLES, false, MAX_RIDE_S + 1) };
+  // Time only moves forward, and no ride runs longer than 48 h.
+  let total = 0;
+  for (const d of out.t as number[]) { if (d < 0) throw new BadRequest("track.t: time can't go backwards"); total += d; }
+  if (total > MAX_RIDE_S) throw new BadRequest("track.t: a ride can't be longer than 48 hours");
   if (o.a !== undefined) out.a = ints(o.a, "a", MAX_SAMPLES, true);
   if (o.s !== undefined) out.s = ints(o.s, "s", MAX_SAMPLES, true);
   // v2: heart rate (bpm), cadence (rpm) and power (W) per sample, whole numbers 0-3000, null where there's no reading.
   if (o.v === 2) {
     for (const k of ["h", "c", "w"] as const) {
       if (o[k] === undefined) continue;
-      const arr = ints(o[k], k, MAX_SAMPLES, true, 3001);
-      if (arr.some((x) => x !== null && x < 0)) throw new BadRequest(`track.${k}: expected integers from 0 to 3000`);
+      const arr = ints(o[k], k, MAX_SAMPLES, true, k === "h" ? 251 : 3001);
+      if (arr.some((x) => x !== null && x < 0)) throw new BadRequest(`track.${k}: expected integers from 0 to 3000 (heart rate to 250)`);
       out[k] = arr;
     }
   }
@@ -178,6 +183,8 @@ const TRAINING_STATS: Record<string, [number, number]> = {
 export const POWER_CURVE_SECONDS = ["5", "15", "30", "60", "300", "600", "1200", "3600"];
 /** Everything in a ride's stats that is health data, which only the rider may see. */
 export const HEALTH_STAT_KEYS = [...Object.keys(TRAINING_STATS), "hrZones", "powerCurve"] as const;
+/** The only stats anyone but the rider may see: what the feed and the ride page show. A new field is private until listed here. */
+export const PUBLIC_STAT_KEYS = [...STAT_KEYS, "bests"] as const;
 
 /**
  * The ride's stats as anyone but its owner may see them: no heart rate, effort, load or power.
@@ -185,13 +192,13 @@ export const HEALTH_STAT_KEYS = [...Object.keys(TRAINING_STATS), "hrZones", "pow
  */
 export function publicStats<T extends Record<string, unknown> | null | undefined>(stats: T): T {
   if (!stats) return stats;
-  const out: Record<string, unknown> = { ...stats };
-  for (const k of HEALTH_STAT_KEYS) delete out[k];
+  const out: Record<string, unknown> = {};
+  for (const k of PUBLIC_STAT_KEYS) if (k in stats) out[k] = stats[k];
   return out as T;
 }
 
 /** The ride summary: a handful of numbers plus best efforts (metres → seconds). */
-function rideStats(v: unknown): string {
+export function rideStats(v: unknown): string {
   const o = obj(v);
   const out: Obj = {};
   for (const k of STAT_KEYS) {
@@ -375,4 +382,15 @@ export function feedQuery(before: string | undefined, limit: string | undefined)
   const n = limit === undefined ? 20 : Number(limit);
   if (!Number.isInteger(n) || n < 1 || n > 50) throw new BadRequest("limit: expected 1-50");
   return { at, id, limit: n };
+}
+
+const GOAL_PERIODS = ["week", "month", "year"] as const;
+const GOAL_METRICS = ["distance", "time", "rides"] as const;
+/** Allowed targets: km, hours, rides. */
+const GOAL_MAX = { distance: [1, 100_000], time: [1, 5_000], rides: [1, 2_000] } as const satisfies Record<string, readonly [number, number]>;
+
+export function goalBody(v: unknown) {
+  const o = obj(v);
+  const metric = oneOf(o, "metric", GOAL_METRICS);
+  return { period: oneOf(o, "period", GOAL_PERIODS), metric, target: num(o, "target", GOAL_MAX[metric][0], GOAL_MAX[metric][1]) };
 }

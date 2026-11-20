@@ -21,6 +21,10 @@ export const hasPosition = (s: Sample) => Number.isFinite(s.ll[0]) && Number.isF
 export const positioned = (samples: Sample[]) => samples.filter(hasPosition);
 
 /** Detect the format from the bytes (FIT has ".FIT" at offset 8, else text starting with XML) and parse. */
+export class TooLong extends Error {
+  constructor() { super("That file spans more than 48 hours, so a timestamp in it is probably wrong. Kayuh can't import it."); }
+}
+
 export function parseActivity(data: ArrayBuffer | string): ImportedActivity {
   if (typeof data !== "string") {
     const b = new Uint8Array(data);
@@ -39,7 +43,11 @@ const num = (v: string | undefined) => {
 };
 const whole = (v: number | null) => (v === null ? null : Math.round(v));
 /** A sensor reading of 0 bpm or rpm means "no signal"; 0 W is real (coasting). */
-const reading = (v: number | null, min: number) => (v !== null && v >= min && v <= 3000 ? Math.round(v) : null);
+const reading = (v: number | null, min: number, max = 3000) => (v !== null && v >= min && v <= max ? Math.round(v) : null);
+/** Heart rate outside 25-250 bpm is a sensor glitch (strap noise), not a reading. */
+const heart = (v: number | null) => reading(v, 25, 250);
+/** A ride longer than this is a bad timestamp or the wrong file (the server stores the same limit). */
+export const MAX_RIDE_S = 48 * 3600;
 
 function ms(iso: string | undefined): number | null {
   if (!iso) return null;
@@ -65,6 +73,7 @@ function finish(raw: Raw[], name?: string): ImportedActivity {
   if (!raw.length) throw new Error("No timed track points found in this file");
   raw.sort((a, b) => a.ms - b.ms);
   const startMs = raw[0].ms;
+  if (raw[raw.length - 1].ms - startMs > MAX_RIDE_S * 1000) throw new TooLong();
   const samples: Sample[] = raw.map((r) => ({
     ll: r.lon !== null && r.lat !== null && Math.abs(r.lat) <= 90 && Math.abs(r.lon) <= 180 ? [r.lon, r.lat] : [NaN, NaN],
     t: Math.round((r.ms - startMs) / 1000),
@@ -88,7 +97,7 @@ export function parseGpx(xml: string): ImportedActivity {
     const lat = num(attr(m[1], "lat")?.[1] ?? attr(m[1], "lat")?.[2]), lon = num(attr(m[1], "lon")?.[1] ?? attr(m[1], "lon")?.[2]);
     raw.push({
       ms: t, lon, lat, alt: num(tag(body, "ele")),
-      hr: reading(num(tag(body, "hr")), 1), cad: reading(num(tag(body, "cad")), 1),
+      hr: heart(num(tag(body, "hr"))), cad: reading(num(tag(body, "cad")), 1),
       power: reading(num(tag(body, "PowerInWatts") ?? tag(body, "power") ?? tag(body, "watts")), 0),
     });
   }
@@ -111,7 +120,7 @@ export function parseTcx(xml: string): ImportedActivity {
     const hr = tag(tag(body, "HeartRateBpm") ?? "", "Value");
     raw.push({
       ms: t, lat: num(tag(pos, "LatitudeDegrees")), lon: num(tag(pos, "LongitudeDegrees")), alt: num(tag(body, "AltitudeMeters")),
-      hr: reading(num(hr), 1), cad: reading(num(tag(body, "Cadence")), 1), power: reading(num(tag(body, "Watts")), 0),
+      hr: heart(num(hr)), cad: reading(num(tag(body, "Cadence")), 1), power: reading(num(tag(body, "Watts")), 0),
     });
   }
   const notes = tag(xml, "Notes");
@@ -153,7 +162,13 @@ export function parseFit(data: ArrayBuffer): ImportedActivity {
       break;
     }
     const end = Math.min(dv.byteLength, pos + headerSize + dv.getUint32(pos + 4, true));
-    readFitMessages(dv, pos + headerSize, end, raw);
+    try {
+      readFitMessages(dv, pos + headerSize, end, raw);
+    } catch (e) {
+      // A damaged file: keep what was read before the damage, unless that is nothing.
+      if (!raw.length) throw e;
+      break;
+    }
     pos = end + 2; // the trailing CRC
   }
   return finish(raw);
@@ -223,7 +238,7 @@ function readFitMessages(dv: DataView, start: number, end: number, out: Raw[]) {
     if (def.global === 20 && ts !== null) {
       out.push({
         ms: FIT_EPOCH_MS + ts * 1000, lat, lon, alt: alt2 ?? alt, kmh: spd2 ?? spd,
-        hr: reading(hr, 1), cad: reading(cad, 1), power: reading(power, 0),
+        hr: heart(hr), cad: reading(cad, 1), power: reading(power, 0),
       });
     }
   }

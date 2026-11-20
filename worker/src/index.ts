@@ -3,6 +3,8 @@ import { accessEnforced, requestEmail, type AuthEnv } from "./auth.ts";
 import { getConditions } from "./conditions.ts";
 import { AVATAR_AT, avatarUrl, registerAvatars } from "./avatars.ts";
 import { registerCrews } from "./crews.ts";
+import { registerRideData } from "./rideData.ts";
+import { registerGoals } from "./goals.ts";
 import { searchPlaces } from "./search.ts";
 import { trimEnds } from "./polyline.ts";
 import {
@@ -139,6 +141,9 @@ async function mergeDevice(db: D1Database, device: string, account: string) {
     db.prepare("UPDATE routes SET user_id = ? WHERE user_id = ?").bind(account, device),
     db.prepare("UPDATE rides SET user_id = ? WHERE user_id = ?").bind(account, device),
     db.prepare("UPDATE segment_feedback SET user_id = ? WHERE user_id = ?").bind(account, device),
+    // Body settings move over only where the account has none of its own.
+    ...["birth_year", "max_hr", "rest_hr", "ftp_w", "weight_kg"].map((col) =>
+      db.prepare(`UPDATE users SET ${col} = (SELECT ${col} FROM users WHERE id = ?) WHERE id = ? AND ${col} IS NULL`).bind(device, account)),
     db.prepare("DELETE FROM users WHERE id = ?").bind(device),
   ]);
 }
@@ -152,7 +157,7 @@ const PUBLIC_API = [/^\/api\/health$/, /^\/api\/search$/, /^\/api\/conditions$/,
  */
 const ACCOUNT_API = [
   /^\/api\/(crews|group-rides)(\/|$)/, /^\/api\/crew-rides$/, /^\/api\/feed$/, /^\/api\/(follow|following|followers|comments)(\/|$)/,
-  /^\/api\/me\/follow(\/|$)/, /^\/api\/rides\/[^/]+\/(sharing|kudos|comments)$/,
+  /^\/api\/me\/follow(\/|$)/, /^\/api\/rides\/[^/]+\/(sharing|kudos|comments)$/, /^\/api\/goals(\/|$)/,
 ];
 
 app.use("/api/*", async (c, next) => {
@@ -197,7 +202,9 @@ app.put("/api/me", async (c) => {
 
 registerCrews(app);
 registerAvatars(app);
+registerRideData(app);
 registerSocial(app);
+registerGoals(app);
 
 function routeOut(r: Record<string, string | number>) {
   return {

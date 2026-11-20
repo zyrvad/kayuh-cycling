@@ -2,6 +2,7 @@
 
 Each phase ends with something usable on a ride. Data comes first because it's the bottleneck.
 Full feature list: [docs/FEATURES.md](docs/FEATURES.md). Decisions: [KICKOFF.md](KICKOFF.md).
+**Current goals list (order of work from Nov 2026): [docs/GOALS.md](docs/GOALS.md).**
 
 | # | Phase | You can use it to… |
 |---|---|---|

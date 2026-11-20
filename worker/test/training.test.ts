@@ -130,3 +130,30 @@ test("health data reaches the owner only: detail, feed and crew rides", async ()
   noHealth(inCrew[0]);
   assert.equal(JSON.stringify(inCrew).includes("avgHr"), false);
 });
+
+test("publicStats is an allowlist: an unknown future field is not leaked", () => {
+  const out = publicStats({ ...STATS, restingHrNew: 50, sleepScore: 90 } as any) as Record<string, unknown>;
+  assert.equal(out.restingHrNew, undefined);
+  assert.equal(out.sleepScore, undefined);
+  assert.equal(out.avgKmh, 12);
+});
+
+test("a track longer than 48 h, or going backwards, is refused", async () => {
+  const tk = (t: number[]) => ({ track: { v: 1, p: encodePolyline(t.map((_, i) => [103.8 + i * 0.001, 1.35] as [number, number])), t }, stats: STATS });
+  const put = async (b: unknown) => (await call("POST", "/api/rides", { as: ALICE, body: ride(b as any) })).status;
+  assert.equal(await put(tk([0, 5000000])), 400);
+  assert.equal(await put(tk([0, 5, -3])), 400);
+  assert.equal(await put({ stats: { ...STATS, maxHr: 261 } }), 400);
+});
+
+test("signing in moves the device's body settings to the account where it has none", async () => {
+  const dev = crypto.randomUUID();
+  const as = (h: Record<string, string>, method: string, path: string, body?: unknown) =>
+    app.request(path, { method, headers: { "Content-Type": "application/json", ...h }, body: body ? JSON.stringify(body) : undefined }, env);
+  assert.equal((await as({ "X-Kayuh-Device": dev }, "PUT", "/api/me", { ...BASE, maxHr: 180, ftpW: 200, weightKg: 70 })).status, 200);
+  const res = await as({ "X-Kayuh-Device": dev, "X-Dev-Email": "carol@example.com" }, "GET", "/api/me");
+  const me: any = await res.json();
+  assert.equal(me.maxHr, 180);
+  assert.equal(me.ftpW, 200);
+  assert.equal(me.weightKg, 70);
+});

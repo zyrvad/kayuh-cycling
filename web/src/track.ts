@@ -3,7 +3,7 @@
  * the same shape), and the analysis the ride detail page shows.
  */
 import { haversine, type LonLat } from "@kayuh/router";
-import { decodePolyline, encodePolyline } from "./util.ts";
+import { decodePolyline, encodePolyline, maxOf } from "./util.ts";
 
 export interface Sample {
   ll: LonLat;
@@ -238,7 +238,7 @@ export function analyse(samples: Sample[], legStarts: number[] = [0], opts: { ph
     while (k < n - 1 && samples[k + 1].t - s.t <= 10 && samples[k + 1].t - samples[k].t <= 8) k++;
     return Math.min(MAX_PLAUSIBLE_KMH, kmhOf(cumM[k] - cumM[j], samples[k].t - samples[j].t));
   });
-  const maxKmh = speed.length ? Math.max(...speed) : 0;
+  const maxKmh = maxOf(speed, 0);
 
   const elevation = smoothAltitude(samples);
   let elevGainM: number | undefined;
@@ -269,14 +269,17 @@ export function analyse(samples: Sample[], legStarts: number[] = [0], opts: { ph
   }
 
   // Speed by path type, from the planned route's tier at each point.
-  const tierM = [0, 0, 0, 0, 0, 0], tierS = [0, 0, 0, 0, 0, 0];
+  // Distance counts every step on the tier (so it matches the tier bar); speed uses only the moving steps.
+  const tierM = [0, 0, 0, 0, 0, 0], tierMovM = [0, 0, 0, 0, 0, 0], tierS = [0, 0, 0, 0, 0, 0];
   for (let i = 1; i < n; i++) {
     const t = samples[i].tier;
-    if (t < 0 || !moving[i]) continue;
+    if (t < 0) continue;
     tierM[t] += cumM[i] - cumM[i - 1];
+    if (!moving[i]) continue;
+    tierMovM[t] += cumM[i] - cumM[i - 1];
     tierS[t] += samples[i].t - samples[i - 1].t;
   }
-  const byTier = tierM.map((m, tier) => ({ tier, distanceM: m, kmh: kmhOf(m, tierS[tier]) })).filter((x) => x.distanceM >= 100);
+  const byTier = tierM.map((m, tier) => ({ tier, distanceM: m, kmh: kmhOf(tierMovM[tier], tierS[tier]) })).filter((x) => x.distanceM >= 100);
 
   const legs = (n ? legStarts : []).map((start, li) => {
     const from = Math.min(start, n - 1);
@@ -347,6 +350,10 @@ const definedOnly = <T extends object>(o: T): Partial<T> => Object.fromEntries(O
 const DEFAULT_MAX_HR = 190;
 /** A sensor reading holds for this long until the next one arrives; longer than that is a gap (watch paused, signal lost). */
 const HOLD_S = 10;
+/** Longest span (seconds) the per-second series covers: 48 h, the longest ride Kayuh stores. */
+const MAX_SPAN_S = 48 * 3600 + 1;
+const HR_MIN = 25, HR_MAX = 250;
+const validHr = (v: number | null) => (v !== null && v >= HR_MIN && v <= HR_MAX ? v : null);
 export const POWER_CURVE_S = [5, 15, 30, 60, 300, 600, 1200, 3600] as const;
 export const HR_ZONE_LABEL = ["Z1 Recovery", "Z2 Endurance", "Z3 Tempo", "Z4 Threshold", "Z5 Max"];
 export const POWER_ZONE_LABEL = ["Z1 Active recovery", "Z2 Endurance", "Z3 Tempo", "Z4 Threshold", "Z5 VO2 max", "Z6 Anaerobic", "Z7 Neuromuscular"];
@@ -376,12 +383,14 @@ export function powerZoneOf(watts: number, ftp: number): number {
  */
 export function perSecond(samples: Sample[], pick: (s: Sample) => number | null): (number | null)[] {
   if (!samples.length) return [];
-  const t0 = samples[0].t, out: (number | null)[] = new Array(samples[samples.length - 1].t - t0 + 1).fill(null);
+  // Never size by the raw time span: one bad timestamp would ask for billions of slots.
+  const t0 = samples[0].t, len = Math.min(Math.max(0, samples[samples.length - 1].t - t0) + 1, MAX_SPAN_S);
+  const out: (number | null)[] = new Array(len).fill(null);
   for (let i = 0; i < samples.length; i++) {
     const v = pick(samples[i]);
     if (v === null) continue;
     const from = samples[i].t - t0, end = i + 1 < samples.length ? samples[i + 1].t - t0 : from + 1;
-    for (let s = from; s < Math.min(end, from + HOLD_S); s++) out[s] = v;
+    for (let s = Math.max(0, from); s < Math.min(end, from + HOLD_S, len); s++) out[s] = v;
   }
   return out;
 }
@@ -390,7 +399,7 @@ export interface HrMetrics { avgHr: number; maxHr: number; hrZones: number[]; ma
 
 /** Time in each heart-rate zone (seconds), average and highest heart rate. null when the track has no heart rate. */
 export function hrMetrics(samples: Sample[], phys?: Physiology | null): HrMetrics | null {
-  const series = perSecond(samples, (s) => s.hr);
+  const series = perSecond(samples, (s) => validHr(s.hr));
   const max = maxHrFor(phys);
   const zones = [0, 0, 0, 0, 0];
   let sum = 0, n = 0;
@@ -401,7 +410,7 @@ export function hrMetrics(samples: Sample[], phys?: Physiology | null): HrMetric
     n++;
   }
   if (!n) return null;
-  return { avgHr: Math.round(sum / n), maxHr: Math.max(...samples.map((s) => s.hr ?? 0)), hrZones: zones, max };
+  return { avgHr: Math.round(sum / n), maxHr: maxOf(samples.map((s) => validHr(s.hr) ?? 0)), hrZones: zones, max };
 }
 
 /**
@@ -462,7 +471,7 @@ export function powerMetrics(samples: Sample[], ftpW?: number | null): PowerMetr
     const b = best(d);
     if (b >= 0) powerCurve[String(d)] = Math.round(b);
   }
-  const out: PowerMetrics = { avgPower: Math.round(avg), maxPower: Math.max(...samples.map((s) => s.power ?? 0)), np: Math.round(np), seconds, powerCurve };
+  const out: PowerMetrics = { avgPower: Math.round(avg), maxPower: Math.min(4000, maxOf(samples.map((s) => s.power ?? 0))), np: Math.round(np), seconds, powerCurve };
   if (ftpW && ftpW > 0) {
     out.intensityFactor = Math.round((np / ftpW) * 100) / 100;
     out.tss = Math.round(((seconds * np * (np / ftpW)) / (ftpW * 3600)) * 100);

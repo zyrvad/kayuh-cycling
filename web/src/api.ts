@@ -178,6 +178,9 @@ export const api = {
   shareRoute: (id: string) => req<{ token: string }>("POST", `/api/routes/${id}/share`),
   shared: (token: string) => req<{ route: SavedRoute }>("GET", `/api/share/${token}`).then((r) => r.route),
   rides: () => req<{ rides: Ride[] }>("GET", "/api/rides").then((r) => r.rides),
+  goals: () => req<{ goals: import("./fitness.ts").Goal[] }>("GET", "/api/goals").then((r) => r.goals),
+  setGoal: (g: Omit<import("./fitness.ts").Goal, "id">) => req<{ goal: import("./fitness.ts").Goal }>("PUT", "/api/goals", g).then((r) => r.goal),
+  deleteGoal: (id: string) => req("DELETE", `/api/goals/${id}`),
   ride: (id: string) => req<{ ride: RideDetail }>("GET", `/api/rides/${id}`).then((r) => r.ride),
   crewFeed: () => req<{ rides: CrewRide[] }>("GET", "/api/crew-rides").then((r) => r.rides),
   logRide: (r: Omit<Ride, "id" | "visibility" | "routeId" | "predictedS" | "stats" | "hasTrack" | "sharedCrewIds" | "shareFollowers" | "rpe"> & {
@@ -187,6 +190,8 @@ export const api = {
   deleteRide: (id: string) => req("DELETE", `/api/rides/${id}`),
   /** Rate how hard a ride felt, 1-10 (null clears it). */
   setRideEffort: (id: string, rpe: number | null) => req<{ rpe: number | null }>("PUT", `/api/rides/${id}/effort`, { rpe }),
+  /** Replace a ride's track and stats (adding watch data to a recorded ride). Owner only. */
+  putRideTrack: (id: string, body: { track: TrackJson; stats: RideStats }) => req<{ ok: true }>("PUT", `/api/rides/${id}/track`, body),
   rideSharing: (id: string) => req<RideSharing>("GET", `/api/rides/${id}/sharing`),
   setRideSharing: (id: string, s: RideSharing) => req<RideSharing>("PUT", `/api/rides/${id}/sharing`, s),
 
