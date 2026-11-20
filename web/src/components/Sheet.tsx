@@ -69,6 +69,7 @@ function ClassicSheet({ class: cls, peek, children }: SheetProps) {
 function DetentSheet({ class: cls, peek, detents, initial, onDetent, summary, children }: SheetProps & { detents: Detent[] }) {
   const el = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
+  const head = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const [detent, setDetent] = useState<Detent>(initial && detents.includes(initial) ? initial : detents[0]);
   const cur = useRef(detent);
@@ -82,9 +83,10 @@ function DetentSheet({ class: cls, peek, detents, initial, onDetent, summary, ch
     const sh = el.current, bd = body.current, ct = content.current;
     if (!sh || !bd || !ct) return;
     const H = sh.offsetHeight;
+    const collapsedH = Math.max(peek, head.current?.offsetHeight ?? 0);
     const natural = sh.clientHeight - bd.clientHeight + ct.offsetHeight;
     const half = Math.max(peek + 40, Math.min(window.innerHeight * 0.45, natural));
-    pos.current = { full: 0, half: Math.max(0, H - Math.min(H, half)), collapsed: Math.max(0, H - peek) };
+    pos.current = { full: 0, half: Math.max(0, H - Math.min(H, half)), collapsed: Math.max(0, H - collapsedH) };
   };
   /** Detents that sit at distinct heights, in the order given. */
   const usable = () => detents.filter((d, i, a) => a.findIndex((o) => Math.abs(pos.current[o] - pos.current[d]) < 8) === i);
@@ -116,6 +118,7 @@ function DetentSheet({ class: cls, peek, detents, initial, onDetent, summary, ch
     });
     ro.observe(el.current);
     ro.observe(content.current);
+    if (head.current) ro.observe(head.current);
     return () => ro.disconnect();
   }, []);
 
@@ -219,7 +222,7 @@ function DetentSheet({ class: cls, peek, detents, initial, onDetent, summary, ch
 
   return (
     <div ref={el} class={`${cls} sheet-d is-${detent}`} data-detent={detent}>
-      <div class="sheet-head" onPointerDown={onHeadDown}>
+      <div ref={head} class="sheet-head" onPointerDown={onHeadDown}>
         <button class="sheet-grip" type="button" aria-label={`Panel: ${LABEL[detent]}`} aria-expanded={detent !== "collapsed"}
           onClick={(e) => { if (e.detail === 0) cycle(); }}>
           <span class="handle" />

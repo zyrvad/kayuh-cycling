@@ -135,7 +135,7 @@ export function Home() {
                 <button class="home-row" onClick={() => openRide(feed.id, true)}>
                   <Avatar name={feed.rider.name} url={feed.rider.avatar} />
                   <span class="txt">
-                    <b>{feed.rider.name.split(" ")[0]} rode {km(feed.distanceM)} km</b>
+                    <b>{feed.rider.name} rode {km(feed.distanceM)} km</b>
                     <span>{feed.name}</span>
                     <span>{ago(feed.riddenAt)}</span>
                   </span>

@@ -71,7 +71,8 @@ input { font: inherit; }
 .icon-btn.outline { width: 52px; height: 52px; border: 1px solid var(--line-2); border-radius: 14px; }
 .icon-btn.profile { width: 50px; height: 50px; border-radius: 14px; font-weight: 800; font-size: 16px; color: var(--accent); }
 .icon-btn.locate { color: var(--blue); }
-.mini-btn { width: 44px; height: 44px; border: 0; border-radius: 12px; background: transparent; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.mini-btn { position: relative; width: 36px; height: 36px; border: 0; border-radius: 12px; background: transparent; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.mini-btn::after { content: ""; position: absolute; inset: -4px; }
 .mini-btn:hover { background: var(--soft); }
 .link-btn { border: 0; background: none; color: var(--accent-deep); font-weight: 700; font-size: 15px; padding: 4px 6px; min-height: 44px; }
 .pill-btn { border: 1px solid var(--line-2); background: var(--surface); border-radius: 999px; min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }

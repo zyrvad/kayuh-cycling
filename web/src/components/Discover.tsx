@@ -132,11 +132,11 @@ export function Discover({ map }: { map: MapView | null }) {
         </div>
       )}
 
-      <Sheet class="sheet discover-sheet" peek={100} detents={["collapsed", "half", "full"]} initial="half" summary={
+      <Sheet class="sheet discover-sheet" peek={64} detents={["collapsed", "half", "full"]} initial="half" summary={
         <div class="row between">
           <div class="stack-2">
             <strong class="lg">{parking.length ? `${parking.length} legal parking spot${parking.length > 1 ? "s" : ""} nearby` : "No legal parking within 400 m"}</strong>
-            <span class="muted">
+            <span class="muted" style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {closest ? `Closest ${closest.dist} m · ${closest.name}` : routerInfo.value ? "Try another spot on the map" : "Loading Singapore's paths…"}
             </span>
           </div>

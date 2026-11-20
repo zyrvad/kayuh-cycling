@@ -18,3 +18,8 @@
 .sheet-d .sheet-body { flex: 1; min-height: 0; overflow-y: hidden; overscroll-behavior: contain; padding: 0 16px 16px; }
 .sheet-d.is-full .sheet-body { overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .sheet-d .sheet-content { display: flex; flex-direction: column; gap: 14px; }
+
+/* Collapsed: only the handle and summary show. */
+.sheet-d .sheet-body { transition: opacity 150ms ease, visibility 0s linear 0s; }
+.sheet-d.is-collapsed .sheet-body { visibility: hidden; opacity: 0; pointer-events: none; transition: opacity 150ms ease, visibility 0s linear 150ms; }
+@media (prefers-reduced-motion: reduce) { .sheet-d .sheet-body, .sheet-d.is-collapsed .sheet-body { transition: none; } }
