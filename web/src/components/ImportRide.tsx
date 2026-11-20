@@ -9,7 +9,7 @@ import { router } from "../routerClient.ts";
 import { me, openRide, showToast } from "../state.ts";
 import { analyse, encodeTrack, summary, type Analysis, type RideStats, type Sample, type TrackJson } from "../track.ts";
 import { duration, encodePolyline, km } from "../util.ts";
-import { Close } from "./Icons.tsx";
+import { Close, Upload } from "./Icons.tsx";
 import "./ride-health.css";
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -58,7 +58,7 @@ async function prepare(file: File): Promise<Prepared> {
 }
 
 /** "Import ride" button and the preview sheet that follows a picked file. */
-export function ImportRide({ onSaved }: { onSaved: () => void }) {
+export function ImportRide({ onSaved, compact }: { onSaved: () => void; compact?: boolean }) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [prep, setPrep] = useState<Prepared | null>(null);
@@ -107,7 +107,9 @@ export function ImportRide({ onSaved }: { onSaved: () => void }) {
   return (
     <>
       <input ref={input} type="file" accept={ACCEPT} class="visually-hidden-input" tabIndex={-1} aria-hidden="true" onChange={pick} />
-      <button class="btn outline" disabled={busy} onClick={() => input.current?.click()}>{busy && !prep ? "Reading file…" : "Import ride"}</button>
+      {compact
+        ? <button class="btn secondary sm" data-tour="rides-import" disabled={busy} onClick={() => input.current?.click()}><Upload />{busy && !prep ? "Reading…" : "Import"}</button>
+        : <button class="btn secondary" disabled={busy} onClick={() => input.current?.click()}>{busy && !prep ? "Reading file…" : "Import ride"}</button>}
       {error && <div class="banner warn">{error}</div>}
       {prep && (
         <div class="sheet-full" role="dialog" aria-label="Import ride">
@@ -175,7 +177,7 @@ export function AddWatchFile({ ride, samples, onSaved }: {
   return (
     <section class="watch-file">
       <input ref={input} type="file" accept={ACCEPT} class="visually-hidden-input" tabIndex={-1} aria-hidden="true" onChange={pick} />
-      <button class="btn outline" disabled={busy} onClick={() => input.current?.click()}>{busy ? "Adding…" : "Add watch file"}</button>
+      <button class="btn secondary" disabled={busy} onClick={() => input.current?.click()}>{busy ? "Adding…" : "Add watch file"}</button>
       <p class="muted small">Adds heart rate and power from a GPX, TCX or FIT file of the same ride, matched by clock time.</p>
     </section>
   );

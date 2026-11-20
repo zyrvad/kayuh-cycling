@@ -8,7 +8,9 @@ import type { MapView } from "../map.ts";
 import { Flyover } from "./Flyover.tsx";
 import { Avatar, Page, TabBar, TierBar } from "./common.tsx";
 import { crewSegment, Feed } from "./Feed.tsx";
-import { Back, Share, Trash } from "./Icons.tsx";
+import { Back, Gear, Share, Trash } from "./Icons.tsx";
+import "./route-card.css";
+import "./crew.css";
 import { openSaved } from "./Tabs.tsx";
 
 const when = (iso: string) =>
@@ -87,8 +89,8 @@ function CrewHome() {
   return (
     <Page title="Crew">
       <div class="segmented" role="group" aria-label="Show">
-        <button class={seg === "feed" ? "seg active" : "seg"} aria-pressed={seg === "feed"} onClick={() => (crewSegment.value = "feed")}>Feed</button>
-        <button class={seg === "crews" ? "seg active" : "seg"} aria-pressed={seg === "crews"} onClick={() => (crewSegment.value = "crews")}>Crews</button>
+        <button data-tour="crew-feed" class={seg === "feed" ? "seg active" : "seg"} aria-pressed={seg === "feed"} onClick={() => (crewSegment.value = "feed")}>Feed</button>
+        <button data-tour="crew-crews" class={seg === "crews" ? "seg active" : "seg"} aria-pressed={seg === "crews"} onClick={() => (crewSegment.value = "crews")}>Crews</button>
       </div>
       {seg === "feed" ? <Feed /> : <CrewList />}
     </Page>
@@ -158,7 +160,7 @@ function CrewList() {
         <label class="field"><span>Invite code or link</span>
           <input required value={code} onInput={(e) => setCode((e.target as HTMLInputElement).value)} placeholder="ABCD2345" autoCapitalize="characters" />
         </label>
-        <button class="btn outline">Join</button>
+        <button class="btn secondary">Join</button>
       </form>
     </>
   );
@@ -182,10 +184,19 @@ function CrewPage({ id }: { id: string }) {
     api.crewRoutes(id).then(setRoutes).catch(() => {});
   };
   useEffect(load, [id]);
+  const [menu, setMenu] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const closeMenu = () => { setMenu(false); setConfirming(false); };
+  useEffect(() => {
+    if (!menu) return;
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") closeMenu(); };
+    addEventListener("keydown", k);
+    return () => removeEventListener("keydown", k);
+  }, [menu]);
   const invite = crew ? `${location.origin}/join/${crew.inviteCode}` : "";
 
   return (
-    <Page title={crew?.name ?? "Crew"}>
+    <Page title={crew?.name ?? "Crew"} actions={crew ? <button class="icon-btn" aria-label="Crew settings" onClick={() => setMenu(true)}><Gear size={20} /></button> : undefined}>
       <button class="link-btn back-link" onClick={() => { crewSegment.value = "crews"; crewView.value = { kind: "list" }; }}><Back size={16} /> All crews</button>
       {error && <div class="banner warn">{error}</div>}
       {crew && (
@@ -195,10 +206,10 @@ function CrewPage({ id }: { id: string }) {
             <p class="muted small">Anyone with this link can join {crew.name} once they've signed in.</p>
             <div class="invite-row">
               <code class="invite-code">{crew.inviteCode}</code>
-              <button class="btn primary" onClick={() => shareLink(`Join ${crew.name} on Kayuh`, invite)}><Share size={18} /> Share link</button>
+              <button class="btn primary sm" onClick={() => shareLink(`Join ${crew.name} on Kayuh`, invite)}><Share size={18} /> Share link</button>
             </div>
             {crew.role === "owner" && (
-              <button class="link-btn" onClick={async () => {
+              <button class="btn tertiary sm" onClick={async () => {
                 if (!confirm("Make a new invite link? The current one will stop working.")) return;
                 await api.newInvite(id).catch((e) => showToast(e.message));
                 load();
@@ -266,12 +277,28 @@ function CrewPage({ id }: { id: string }) {
             </ul>
           </section>
 
-          <button class="btn outline" onClick={async () => {
-            if (!confirm(`Leave ${crew.name}?`)) return;
-            await api.leaveCrew(id).catch((e) => showToast(e.message));
-            crewView.value = { kind: "list" };
-          }}>Leave crew</button>
         </>
+      )}
+      {menu && crew && (
+        <div class="rc-scrim" onClick={closeMenu}>
+          <div class="rc-menu" role="dialog" aria-label={`${crew.name} settings`} onClick={(e) => e.stopPropagation()}>
+            <h3>{crew.name}</h3>
+            <p class="muted small crew-sheet-note">{crew.members.length} member{crew.members.length === 1 ? "" : "s"}{crew.role === "owner" ? " · you own this crew" : ""}</p>
+            {confirming ? (
+              <>
+                <p class="crew-sheet-note">Leave {crew.name}? You'll stop seeing its rides and group rides.</p>
+                <button class="btn secondary sm" onClick={() => setConfirming(false)}>Cancel</button>
+                <button class="btn destructive sm crew-leave" onClick={async () => {
+                  await api.leaveCrew(id).catch((e) => showToast(e.message));
+                  closeMenu();
+                  crewView.value = { kind: "list" };
+                }}>Leave</button>
+              </>
+            ) : (
+              <button class="btn destructive sm" onClick={() => setConfirming(true)}>Leave crew</button>
+            )}
+          </div>
+        </div>
       )}
     </Page>
   );
@@ -324,9 +351,9 @@ function GroupRidePage({ id, map }: { id: string; map: MapView | null }) {
             )}
             {ride.notes && <p class="notes">{ride.notes}</p>}
             <div class="row gap-10">
-              <button class="btn outline grow" onClick={() => setFlying(true)} disabled={!map}>Flyover</button>
-              <button class="btn primary grow" onClick={openRoute}>Open route</button>
-              <button class="btn outline grow" onClick={async () => {
+              <button class="btn secondary sm grow" onClick={() => setFlying(true)} disabled={!map}>Flyover</button>
+              <button class="btn primary sm grow" onClick={openRoute}>Open route</button>
+              <button class="btn secondary sm grow" onClick={async () => {
                 try {
                   const blob = await api.groupRideIcs(id);
                   const file = new File([blob], "kayuh-ride.ics", { type: "text/calendar" });
@@ -365,9 +392,9 @@ function GroupRidePage({ id, map }: { id: string; map: MapView | null }) {
           </section>
 
           <section class="row gap-10">
-            <button class="btn outline grow" onClick={() => shareLink(ride.title, `${location.origin}/ride/${ride.id}`)}><Share size={18} /> Share</button>
+            <button class="btn secondary sm grow" onClick={() => shareLink(ride.title, `${location.origin}/ride/${ride.id}`)}><Share size={18} /> Share</button>
             {ride.canDelete && (
-              <button class="btn outline grow danger" onClick={async () => {
+              <button class="btn destructive sm grow" onClick={async () => {
                 if (!confirm("Cancel this group ride for everyone?")) return;
                 await api.deleteGroupRide(id).catch((e) => showToast(e.message));
                 openCrew(ride.crewId);

@@ -60,16 +60,16 @@ export function RidesTab({ map }: { map: MapView | null }) {
   const pcn = (rides ?? []).reduce((a, r) => a + r.tierM[0], 0);
   return (
     <>
-      <Page title="Rides">
+      <Page title="Rides" actions={!trainingOn.value ? <ImportRide compact onSaved={reload} /> : undefined}>
         {error && <div class="banner warn">{error}</div>}
-        <div class="segmented rides-switch" role="group" aria-label="Activities or training">
+        <div class="segmented rides-switch" data-tour="rides-switch" role="group" aria-label="Activities or training">
           <button class={!trainingOn.value ? "seg active" : "seg"} aria-pressed={!trainingOn.value} onClick={() => (trainingOn.value = false)}>Activities</button>
           <button class={trainingOn.value ? "seg active" : "seg"} aria-pressed={trainingOn.value} onClick={() => (trainingOn.value = true)}>Training</button>
         </div>
         {trainingOn.value ? <Training /> : <>
-        <div class="segmented" role="group" aria-label="Whose rides">
-          <button class={view === "mine" ? "seg active" : "seg"} aria-pressed={view === "mine"} onClick={() => setView("mine")}>Mine</button>
-          <button class={view === "crew" ? "seg active" : "seg"} aria-pressed={view === "crew"} onClick={() => setView("crew")}>Crew</button>
+        <div class="chip-row" role="group" aria-label="Whose rides">
+          <button class="chip-toggle" aria-pressed={view === "mine"} onClick={() => setView("mine")}>Mine</button>
+          <button class="chip-toggle" aria-pressed={view === "crew"} onClick={() => setView("crew")}>Crew</button>
         </div>
         {view === "mine" ? (
           <>
@@ -78,7 +78,6 @@ export function RidesTab({ map }: { map: MapView | null }) {
               <div><span class="big">{km(pcn)}</span><small>km on park connectors</small></div>
               <div><span class="big">{rides?.length ?? 0}</span><small>rides</small></div>
             </div>
-            <ImportRide onSaved={reload} />
             <p class="muted small">Rides are private. Tap <strong>Private</strong> on one to choose which crews, or your followers, see it: the first and last 200 m always stay hidden.</p>
             {rides?.length === 0 && <p class="muted">Rides you start from a planned route show up here, with the full map and stats.</p>}
             <ul class="list">

@@ -1,0 +1,4 @@
+/* Crew: settings sheet extras. The sheet itself reuses .rc-scrim / .rc-menu from route-card.css. */
+.crew-sheet-note { margin: 0 8px 4px; font-size: 14px; }
+.crew-leave { font-weight: 800; }
+.invite-row .btn { flex-shrink: 0; }
