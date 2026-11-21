@@ -10,6 +10,8 @@ Rules every screen now follows: [SYSTEM.md](SYSTEM.md). Screenshots are 375×812
 
 ## 1. Logo: pick one
 
+Chosen 21 Nov 2026: option 2 (connector-loop).
+
 Open [preview.html](preview.html) (home screen at 180 and 60 px on light and dark wallpaper, favicon at 32 and 16 px,
 wordmark on white and green). Five options in [options/](options/), each with `icon.svg`, `mark.svg`, `wordmark.svg`,
 `icon-192.png`, `icon-512.png` and an opaque `apple-touch-icon.png`.
